@@ -2,14 +2,16 @@
 
 Claude Code loads this file automatically from the repository root. It holds the standing rules for every session.
 
-- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.0), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
+- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.1), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
 - **Roadmap, UX and hosting:** `docs/project-plan-v2.md`.
 - The spec is long, so it is not imported here. Read the sections relevant to the task before writing engine, strategy or statistics code.
 
 ## Current status
 
-- Phase 1 (specification freeze): **done** 2026-11-07. `docs/spec.md` v2.0 frozen; D1–D19 and A1–A4 confirmed.
-- Next: Phase 2 (foundation and early deployment). Not a git repository yet.
+- Phase 1 (specification freeze): **done** 2026-11-07. `docs/spec.md` v2.0 frozen; D1–D19 and A1–A4 confirmed. v2.1 (2026-11-08) renamed "session" to "simulation" (terminology only).
+- Phase 2 (foundation): local work done 2026-11-07 on branch `phase-2-foundation`. Remaining exit criteria need the user: push to GitHub (CI green) and connect Cloudflare Pages (site loads over HTTPS).
+- Next: Phase 3 (blackjack engine, rules Tier 1).
+- Known: `npm audit` reports a moderate `minimatch` advisory inside ESLint tooling only (dev dependency; `npm audit --omit=dev` is clean). The only fix downgrades ESLint 10 to 9, so it is deliberately left. Recheck when ESLint updates.
 
 Update this section at the end of each phase.
 
@@ -37,7 +39,7 @@ Update this section at the end of each phase.
 
 ## Project summary
 
-A personal, browser-only Monte Carlo simulator. The user picks table rules, bankroll, limits, stop conditions and betting strategies. Thousands of seeded sessions run in a bounded pool of Web Workers while a live dashboard shows progress. The user can stop everything. At the end the app shows interactive comparisons and offers a standalone interactive HTML report plus two CSV files. No backend, accounts, database or real-money features. Hosted as a static site on Cloudflare Pages (free tier).
+A personal, browser-only Monte Carlo simulator. The user picks table rules, bankroll, limits, stop conditions and betting strategies. Thousands of seeded simulations run in a bounded pool of Web Workers while a live dashboard shows progress. The user can stop everything. At the end the app shows interactive comparisons and offers a standalone interactive HTML report plus two CSV files. No backend, accounts, database or real-money features. Hosted as a static site on Cloudflare Pages (free tier).
 
 ## Tech stack
 
@@ -53,14 +55,20 @@ A personal, browser-only Monte Carlo simulator. The user picks table rules, bank
 
 ## Commands (keep these scripts working)
 
-`npm run dev`, `npm run build`, `npm run preview`, `npm run lint`, `npm run typecheck`, `npm test`, and `npm run bench:houseedge` (long-running; not part of CI). A change is not done until lint, typecheck and tests pass.
+`npm run dev`, `npm run build`, `npm run preview`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run format` / `npm run format:check`, and `npm run bench:houseedge` (long-running; not part of CI; exits non-zero until Phase 3 implements it). A change is not done until lint, typecheck and tests pass. CI also runs `format:check` and `build`. Node 24 (`.nvmrc`).
+
+How the engine boundary is enforced (do not weaken either layer):
+
+- `eslint/boundaries.js`: lint rules for `src/engine` and `src/shared`, covering no UI or worker imports, no browser globals, no `Math.random`, `Date` or `crypto`, and no `src/shared` → `src/engine` imports. `eslint/boundaries.test.ts` proves each rule fires.
+- `tsconfig.engine.json`: type-checks `src/engine` and `src/shared` with no DOM lib, so browser globals do not compile there.
+- Markdown is excluded from Prettier (`.prettierignore`) so the hand-aligned spec is never reformatted.
 
 ## Repository structure and boundaries
 
 - `src/engine/blackjack` — cards, shoe, hand values, dealer play, round settlement
 - `src/engine/basic-strategy` — expected-value solver, generated and cached strategy tables, decision lookup
 - `src/engine/betting` — strategy interface, registry, the five strategies
-- `src/engine/simulation` — seeded RNG, session-group runner, chunk runner
+- `src/engine/simulation` — seeded RNG, simulation-group runner, chunk runner
 - `src/engine/statistics` — online mean and variance, percentiles, histograms, confidence intervals
 - `src/workers` — worker entry point and typed message contracts
 - `src/features/experiment` — setup form, validation, run controller, progress state
@@ -76,9 +84,9 @@ Dependencies flow one way: UI and workers may import the engine; the engine impo
 
 - **Round:** one initial player hand plus everything it triggers (splits, doubles, dealer play, payouts). Net round profit is the sum of all wagers and payouts. A progression advances once per round, never once per split hand.
 - **Win / loss / push for progressions:** decided only by the sign of net round profit (above zero is a win, below zero a loss, exactly zero a push). This applies to blackjacks, doubles, splits and surrender alike.
-- **Simulation (session):** one seeded run in which every selected strategy plays from the same starting bankroll. The “number of simulations” input is the number of sessions.
-- **Session group:** each strategy has its own bankroll, betting state and its own shoe created from the same session seed. Strategies never influence each other. Paths diverge only when a bankroll shortage changes a double or split for one strategy.
-- **Independent stopping:** each strategy stops on its own; its final profit is frozen and it takes no further bets. The session ends when every selected strategy has stopped. The round limit applies per strategy, so sessions always end.
+- **Simulation:** one seeded run in which every selected strategy plays from the same starting bankroll. The “number of simulations” input is the number of these runs. A simulation contains up to `roundLimit` rounds per strategy; it is not a round count. Always say “simulation” for this, in code, UI, docs and exports. Never use “session” (it was renamed in spec 2.1 to avoid confusion).
+- **Simulation group:** each strategy has its own bankroll, betting state and its own shoe created from the same simulation seed. Strategies never influence each other. Paths diverge only when a bankroll shortage changes a double or split for one strategy.
+- **Independent stopping:** each strategy stops on its own; its final profit is frozen and it takes no further bets. The simulation ends when every selected strategy has stopped. The round limit applies per strategy, so simulations always end.
 - **Stop reasons (per strategy):** `target_reached`, `bust` (cannot fund the required next bet; bankroll may still be above zero), `blocked_table_max` (required bet exceeds the optional table maximum), `round_limit`. A run cancelled by the user is `cancelled` at run level and is never mixed with normal outcomes.
 - **Defaults:** bankroll 500.00, table minimum 20.00, starting bet equal to the table minimum, table maximum optional (blank means none), AUD.
 
@@ -86,7 +94,7 @@ Dependencies flow one way: UI and workers may import the engine; the engine impo
 
 Targets are multiples of the starting bankroll and measure net profit: 0.5x, 1x, 2x, 2.5x (with a 500 bankroll: +250, +500, +1,000, +1,250). Three modes:
 
-- **No target:** sessions end at round limit, bust or block.
+- **No target:** simulations end at round limit, bust or block.
 - **Single target:** each strategy stops on reaching the chosen multiple. First-crossing rounds are still recorded for lower thresholds.
 - **Compare all four targets:** each strategy runs to 2.5x; record the first round each of the four thresholds is crossed. Final-profit statistics in this mode are capped at 2.5x and must be labelled so.
 
@@ -118,46 +126,46 @@ Classic Paroli and 1-3-2-6 are separate strategies. Never merge them or reuse on
 ## Randomness and reproducibility
 
 - Use a small, fast seeded PRNG inside workers. A cryptographic source may create the initial seed once, in the UI layer only.
-- Derive child seeds deterministically for each session and chunk. Record seeds in exports.
+- Derive child seeds deterministically for each simulation and chunk. Record seeds in exports.
 - Results must be identical for 1, 2 or 4 workers. Use integer sums so merge order cannot change aggregates, and never let chunk size or scheduling influence outcomes.
 
 ## Workers and concurrency
 
-- Fixed pool of at most 4 workers. Auto = min(4, max(1, logical cores − 1)); manual 1–4. Never one worker per session.
+- Fixed pool of at most 4 workers. Auto = min(4, max(1, logical cores − 1)); manual 1–4. Never one worker per simulation.
 - Split work into chunks of roughly 100–200 ms so cancellation is prompt. Queue chunks to free workers.
 - Typed message contracts (discriminated unions): start chunk, progress, chunk result, cancel, error. Validate shapes at the boundary.
 - Throttle progress to every 250–500 ms. Stop All cancels queued and active chunks, terminates and recreates workers as a backstop, and marks the run `cancelled` with partial results labelled.
 - A failed chunk is failed or re-queued without double counting.
-- Caps (initial, confirm by benchmark): 50,000 sessions per experiment, 10,000 rounds per session, about 100 million total rounds (sessions × strategies × rounds). Show an estimated runtime before starting.
+- Caps (initial, confirm by benchmark): 50,000 simulations per experiment, 10,000 rounds per simulation, about 100 million total rounds (simulations × strategies × rounds). Show an estimated runtime before starting.
 
 ## Statistics
 
-- Use running (online) mean and variance. Keep one compact typed-array entry per session for exact final percentiles. Checkpoints use running sums plus fixed-bin histograms. Never store per-hand data.
-- Always report the number of sessions beside every percentage and average. Use Wilson intervals for proportions and a confidence interval for means and for return per unit wagered. Describe differences inside the intervals as inconclusive.
+- Use running (online) mean and variance. Keep one compact typed-array entry per simulation for exact final percentiles. Checkpoints use running sums plus fixed-bin histograms. Never store per-hand data.
+- Always report the number of simulations beside every percentage and average. Use Wilson intervals for proportions and a confidence interval for means and for return per unit wagered. Describe differences inside the intervals as inconclusive.
 - Always include **return per unit wagered** next to currency profit; profit in currency mostly follows how much a system wagers.
 - Metrics per strategy: status counts, win/loss/break-even share, mean, median, standard deviation, 5th/25th/75th/95th percentiles, total and maximum wager, drawdown, first-crossing hit rates and rounds per target, bust and block rates, outcome frequencies, unavailable-action count.
 
 ## UI and charts
 
-- Update the live dashboard every 250–500 ms from aggregates. Never draw every session.
+- Update the live dashboard every 250–500 ms from aggregates. Never draw every simulation.
 - Per-simulation comparison grid: the user picks n simulations to show (default 6, maximum 25). Show simulations 1 to n, one panel each, overlaying all chosen strategies' downsampled bankroll curves. A panel fills in when its simulation finishes; never slow the run for display. See spec section 10.9.
 - Setup screen shows calculated target amounts, the total work estimate and a warning when over budget.
-- Final dashboard charts (ECharts): checkpoint profit with percentile bands, final profit distribution, target attainment, drawdown distribution, bet progression, sample sessions. Provide tooltips, series toggles, zoom and click-through.
+- Final dashboard charts (ECharts): checkpoint profit with percentile bands, final profit distribution, target attainment, drawdown distribution, bet progression, sample simulations. Provide tooltips, series toggles, zoom and click-through.
 - Rankings are labelled by goal and by configuration, never as a universal “best strategy”.
 - Keep components small, accessible (labels, keyboard use, contrast) and responsive.
 
 ## Reports and exports
 
-- **Standalone interactive HTML report:** one self-contained file with the chart library, styling and data embedded; works offline; contains configuration and seed, comparison table, charts, target attainment, checkpoint data and a bounded sample of sessions (up to 500 per strategy); states whether the run was complete or partial.
+- **Standalone interactive HTML report:** one self-contained file with the chart library, styling and data embedded; works offline; contains configuration and seed, comparison table, charts, target attainment, checkpoint data and a bounded sample of simulations (up to 500 per strategy); states whether the run was complete or partial.
 - **CSV 1 (summary):** one row per strategy with the metrics above.
-- **CSV 2 (per session):** one row per session per strategy: session id, seed, strategy id and version, rounds played, final bankroll, net profit, total wagered, maximum wager, maximum drawdown, first-crossing round for each target (blank if not reached), stop reason, unavailable-action count.
+- **CSV 2 (per simulation):** one row per simulation per strategy: simulation id, seed, strategy id and version, rounds played, final bankroll, net profit, total wagered, maximum wager, maximum drawdown, first-crossing round for each target (blank if not reached), stop reason, unavailable-action count.
 - Write large exports in chunks with a size warning so the interface never freezes. Also offer a JSON download of configuration and seed.
 
 ## Testing requirements
 
 - Unit tests: ace handling, soft and hard totals, dealer S17/H17, blackjack payouts for 3:2 and 6:5, pushes, doubles and splits fully accounted, strategy transitions after win, loss, push, blackjack and mixed split rounds, integer money arithmetic.
 - Property tests: no bet below the table minimum, above the bankroll or above the table maximum without a recorded stop reason.
-- Simulation tests: final bankroll equals starting bankroll plus net profit; same seed gives the same result; paired seeds are consistent; strategies stop independently and the session ends only when all have stopped; first-crossing rounds are ordered (0.5x no later than 1x, and so on); aggregates match a hand calculation on a small known set; results are identical across worker counts.
+- Simulation tests: final bankroll equals starting bankroll plus net profit; same seed gives the same result; paired seeds are consistent; strategies stop independently and the simulation ends only when all have stopped; first-crossing rounds are ordered (0.5x no later than 1x, and so on); aggregates match a hand calculation on a small known set; results are identical across worker counts.
 - Use the worked examples in `docs/spec.md` as golden test data.
 
 ## Performance rules for hot code

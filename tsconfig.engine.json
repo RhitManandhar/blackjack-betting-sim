@@ -1,0 +1,11 @@
+// Engine and shared code run in Web Workers and Node tests.
+// No DOM or WebWorker lib here, so browser globals fail to type-check.
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.engine.tsbuildinfo",
+    "lib": ["ES2023"],
+    "types": []
+  },
+  "include": ["src/engine", "src/shared"]
+}
