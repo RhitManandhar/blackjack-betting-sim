@@ -1,0 +1,7 @@
+dist
+coverage
+node_modules
+package-lock.json
+
+# Hand-aligned Markdown (frozen spec, plan, instructions): reformatting would churn reviewed text.
+*.md

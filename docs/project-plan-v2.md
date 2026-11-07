@@ -12,7 +12,7 @@ A browser-based Monte Carlo simulator that compares blackjack betting systems wh
 | --- | --- | --- |
 | 1 | Best overall strategy under perfect basic strategy | Return per unit wagered, mean and median profit, volatility, drawdown |
 | 2 | Minimal loss most of the time | Median result, 5th percentile, probability of ending at or above break-even, bust rate |
-| 3 | Maximum win most of the time | 75th and 95th percentile profit, mean profit of winning sessions, largest win, with the downside tail shown beside it |
+| 3 | Maximum win most of the time | 75th and 95th percentile profit, mean profit of winning simulations, largest win, with the downside tail shown beside it |
 | 4 | Reaching 0.5x, 1x, 2x or 2.5x | First-crossing hit rate for each target, rounds to target, bust before target |
 | 5 | Ahead or behind after N rounds; biggest losers | Mean, median, percent profitable and 5th–95th range at user-chosen round checkpoints |
 
@@ -30,7 +30,7 @@ A browser-based Monte Carlo simulator that compares blackjack betting systems wh
 | Table maximum | Optional field; blank means no maximum |
 | Defaults | Bankroll 500, table minimum 20 |
 | Rules scope | All configurable options listed in section 5, delivered in tiers |
-| Reports | Standalone interactive HTML report plus two CSV files (summary and per-session) |
+| Reports | Standalone interactive HTML report plus two CSV files (summary and per-simulation) |
 
 ## 3. Scope and definition of done
 
@@ -51,15 +51,15 @@ A browser-based Monte Carlo simulator that compares blackjack betting systems wh
 
 ### 4.1 Terminology
 
-- **Simulation (session):** one seeded run in which every selected strategy plays from the same starting bankroll. The “number of simulations” input is the number of these sessions.
+- **Simulation:** one seeded run in which every selected strategy plays from the same starting bankroll. The “number of simulations” input is the number of these runs.
 - **Round:** one initial player hand and everything it triggers (splits, doubles, dealer play, payouts). Net round profit is the sum of all wagers and payouts. A progression advances once per round, not once per split hand.
 - **Win / loss / push for progressions:** decided by the sign of net round profit (above zero win, below zero loss, zero push). This covers blackjacks, doubles, splits and surrender.
 
-### 4.2 Session group
+### 4.2 Simulation group
 
-Each strategy in a session has its own bankroll, its own betting state and its own copy of the shoe created from the same seed. All strategies therefore see identical cards unless a bankroll shortage changes a double or split decision for one of them, in which case the paths may diverge and the app records that. Strategies never influence each other.
+Each strategy in a simulation has its own bankroll, its own betting state and its own copy of the shoe created from the same seed. All strategies therefore see identical cards unless a bankroll shortage changes a double or split decision for one of them, in which case the paths may diverge and the app records that. Strategies never influence each other.
 
-Each strategy keeps playing until it hits one of its own stop reasons. A stopped strategy freezes its final profit and takes no further bets. The session finishes when every selected strategy has stopped. The round limit applies to each strategy, so the session always ends.
+Each strategy keeps playing until it hits one of its own stop reasons. A stopped strategy freezes its final profit and takes no further bets. The simulation finishes when every selected strategy has stopped. The round limit applies to each strategy, so the simulation always ends.
 
 ### 4.3 Stop reasons (per strategy)
 
@@ -68,7 +68,7 @@ Each strategy keeps playing until it hits one of its own stop reasons. A stopped
 3. **Blocked by table maximum:** the required next bet exceeds the optional table maximum. No further betting is allowed; bets are never silently capped.
 4. **Round limit reached.**
 
-Stop All is different. It cancels the whole experiment, including queued sessions, and is shown as “cancelled”, never as a normal outcome. Partial results from a cancelled run are labelled as partial.
+Stop All is different. It cancels the whole experiment, including queued simulations, and is shown as “cancelled”, never as a normal outcome. Partial results from a cancelled run are labelled as partial.
 
 ### 4.4 Profit targets
 
@@ -76,7 +76,7 @@ Targets are multiples of the starting bankroll and measure net profit. With a 50
 
 Three target modes:
 
-- **No target:** sessions end at the round limit, bust or table block.
+- **No target:** simulations end at the round limit, bust or table block.
 - **Single target:** each strategy stops when it reaches the chosen multiple. First-crossing rounds are also recorded for any lower thresholds.
 - **Compare all four targets:** each strategy runs until it reaches 2.5x. The first round at which it crosses 0.5x, 1x, 2x and 2.5x is recorded separately. Final-profit statistics in this mode are capped at 2.5x and the report says so.
 
@@ -144,9 +144,9 @@ A strategy decides only the next initial wager. It never changes any hand-playin
 
 ### 7.1 Per-strategy statistics
 
-- Sessions by final status: target reached, bust, blocked, round limit, cancelled.
-- Percent of sessions ending in profit, break-even and loss.
-- Mean, median and standard deviation of session profit; 5th, 25th, 75th and 95th percentiles.
+- Simulations by final status: target reached, bust, blocked, round limit, cancelled.
+- Percent of simulations ending in profit, break-even and loss.
+- Mean, median and standard deviation of simulation profit; 5th, 25th, 75th and 95th percentiles.
 - **Return per unit wagered** (net profit divided by total wagered) with a confidence interval. This is the key fairness metric and should land near the house edge for every system.
 - Total wagered, average and maximum single wager, average rounds played.
 - Largest win, largest loss, maximum and average maximum drawdown.
@@ -160,29 +160,29 @@ Rankings follow the table in section 1, always shown with supporting metrics and
 
 ### 7.3 Statistical reliability
 
-Show the number of sessions beside every percentage and average. Use Wilson intervals for proportions and a confidence interval for means and for return per unit wagered. Differences inside the intervals are described as inconclusive, and small samples trigger a warning.
+Show the number of simulations beside every percentage and average. Use Wilson intervals for proportions and a confidence interval for means and for return per unit wagered. Differences inside the intervals are described as inconclusive, and small samples trigger a warning.
 
 ### 7.4 Round checkpoints (Goal 5)
 
-The user sets checkpoint rounds (default 50, 100, 250, 500, 1,000, limited to the round limit). At each checkpoint the app reports mean and median profit, percent profitable, 5th–95th percentile range, and worst loss. “Which loses most” is read from mean loss and the 5th percentile at each checkpoint. Checkpoint data is stored as running sums plus fixed-bin histograms, to keep memory bounded. Final-result percentiles are computed exactly from compact typed arrays of one value per session.
+The user sets checkpoint rounds (default 50, 100, 250, 500, 1,000, limited to the round limit). At each checkpoint the app reports mean and median profit, percent profitable, 5th–95th percentile range, and worst loss. “Which loses most” is read from mean loss and the 5th percentile at each checkpoint. Checkpoint data is stored as running sums plus fixed-bin histograms, to keep memory bounded. Final-result percentiles are computed exactly from compact typed arrays of one value per simulation.
 
 ## 8. User experience
 
 ### 8.1 Setup screen
 
-- **Simulation size:** number of simulations (sessions), rounds per session, seed (auto or manual), presets.
+- **Simulation size:** number of simulations, rounds per simulation, seed (auto or manual), presets.
 - **Bankroll and limits:** starting bankroll, table minimum, starting bet, optional table maximum, currency.
 - **Stop conditions:** target mode (none, single, compare all four), target multiple with the calculated amount and bankroll, and the text “Each strategy stops at whichever comes first: round limit, profit target, or inability to place its next bet.”
 - **Table rules:** all options in section 5 with a “Recommended baseline” preset.
 - **Strategies:** checkboxes for all five, select all, reset, info icons; Paroli streak length setting.
 - **Checkpoints:** list of rounds for Goal 5.
 - **Simulations shown on screen (n):** how many simulations get their own comparison panel. Default 6, maximum 25, minimum 1, and never more than the number of simulations.
-- **Performance:** worker count Auto or 1–4, with an explanation that sessions are not threads.
+- **Performance:** worker count Auto or 1–4, with an explanation that simulations are not threads.
 - **Pre-run summary:** total rounds of work and an estimated runtime, and a warning if over budget.
 
 ### 8.2 Live screen
 
-- Overall and per-strategy progress, completed sessions, rounds per second, elapsed time.
+- Overall and per-strategy progress, completed simulations, rounds per second, elapsed time.
 - Per-strategy live counts of strategies still playing, targets reached, busts, and blocks.
 - Provisional mean profit, win rate, target-hit rates and average bet.
 - **Per-simulation comparison grid:** one small chart panel for each of the n simulations shown (simulations 1 to n). Each panel overlays the bankroll curves of every chosen strategy in that simulation, so they can be compared on the same cards. A panel fills in as soon as its simulation finishes; simulations finish in milliseconds, so they are not animated round by round and the run is never slowed for display. A strategy that stops early has its line end with a marker naming the stop reason. Clicking a panel enlarges it with tooltips and zoom.
@@ -200,17 +200,17 @@ The user sets checkpoint rounds (default 50, 100, 250, 500, 1,000, limited to th
 6. Drawdown distribution.
 7. Bet progression chart.
 8. Per-simulation comparison grid (the same n panels as the live screen).
-9. Sample-session table with seed, rounds, final profit, maximum bet and stop reason.
+9. Sample-simulation table with seed, rounds, final profit, maximum bet and stop reason.
 
-Interactions: hover tooltips, strategy toggles, zoom and pan, series selection, and click-through from a summary to its sample sessions. Cancelled runs are clearly marked partial.
+Interactions: hover tooltips, strategy toggles, zoom and pan, series selection, and click-through from a summary to its sample simulations. Cancelled runs are clearly marked partial.
 
 ### 8.4 Reports
 
-**Standalone interactive HTML report.** A single self-contained file with the chart library and data embedded. It opens offline with working tooltips, toggles and zoom. It contains configuration and seed, the comparison table, charts, target attainment, checkpoint data, and a bounded sample of sessions (up to 500 per strategy) to keep the file a few megabytes. It states whether the run was complete or partial.
+**Standalone interactive HTML report.** A single self-contained file with the chart library and data embedded. It opens offline with working tooltips, toggles and zoom. It contains configuration and seed, the comparison table, charts, target attainment, checkpoint data, and a bounded sample of simulations (up to 500 per strategy) to keep the file a few megabytes. It states whether the run was complete or partial.
 
-**CSV file 1 — summary** (one row per strategy): strategy id and version, sessions, status counts, profit mean, median, standard deviation and percentiles, return per unit wagered with interval, total wagered, average and maximum wager, drawdown, target hit rates and average rounds per threshold, bust and block rates, and win/loss/push frequencies.
+**CSV file 1 — summary** (one row per strategy): strategy id and version, simulations, status counts, profit mean, median, standard deviation and percentiles, return per unit wagered with interval, total wagered, average and maximum wager, drawdown, target hit rates and average rounds per threshold, bust and block rates, and win/loss/push frequencies.
 
-**CSV file 2 — per session** (one row per session per strategy): session id, seed, strategy id and version, rounds played, final bankroll, net profit, total wagered, maximum wager, maximum drawdown, first-crossing round for each target (blank if not reached), stop reason, count of unavailable double/split actions. Large exports warn the user and are written in chunks so the interface does not freeze.
+**CSV file 2 — per simulation** (one row per simulation per strategy): simulation id, seed, strategy id and version, rounds played, final bankroll, net profit, total wagered, maximum wager, maximum drawdown, first-crossing round for each target (blank if not reached), stop reason, count of unavailable double/split actions. Large exports warn the user and are written in chunks so the interface does not freeze.
 
 Also available: a JSON download of the configuration and seed so a run can be repeated. Recent experiment summaries are kept in browser storage.
 
@@ -236,13 +236,13 @@ Also available: a JSON download of the configuration and seed so a run can be re
 | Limit | Value |
 | --- | --- |
 | Parallel workers | 4 |
-| Simulations (sessions) per experiment | 50,000 soft cap; default 5,000 |
-| Rounds per session | 10,000 maximum; default 1,000 |
-| Total work (sessions × strategies × rounds) | About 100 million rounds; the estimate is shown before the run |
+| Simulations per experiment | 50,000 soft cap; default 5,000 |
+| Rounds per simulation | 10,000 maximum; default 1,000 |
+| Total work (simulations × strategies × rounds) | About 100 million rounds; the estimate is shown before the run |
 | Simulations shown on screen (n) | Default 6, maximum 25 (so at most 25 curves per strategy) |
 | Dashboard refresh | Every 250–500 ms |
 
-The cap is on total rounds rather than only on sessions, because the same session count at 10,000 rounds is twenty times the work. The live screen shows aggregates and a sample of curves; it never draws every session.
+The cap is on total rounds rather than only on simulations, because the same simulation count at 10,000 rounds is twenty times the work. The live screen shows aggregates and a sample of curves; it never draws every simulation.
 
 ## 10. Architecture, data and randomness
 
@@ -255,7 +255,7 @@ Experiment controller: validate, create seeds, queue chunks
 Bounded worker pool (1–4)
    +-- Blackjack engine: shoe, dealing, rule-aware basic strategy, settlement
    +-- Betting strategies: flat, Martingale, Paroli x2, Oscar’s Grind
-   +-- Session-group runner and metrics aggregator
+   +-- Simulation-group runner and metrics aggregator
    |  compact progress and final summaries
    v
 Results store -> live dashboard, final charts, HTML and CSV reports, history
@@ -263,16 +263,16 @@ Results store -> live dashboard, final charts, HTML and CSV reports, history
 
 The engine, strategies and statistics are plain TypeScript with no React imports, so they can be tested alone.
 
-**Randomness.** Model a real shoe with shuffle without replacement and reshuffle at the penetration point. Use a seeded pseudorandom generator inside workers, with deterministic child seeds per session and chunk. A cryptographic source may create the initial seed only. Every strategy in a session receives its own shoe created from the same session seed (paired seeds). Record all seeds in exports.
+**Randomness.** Model a real shoe with shuffle without replacement and reshuffle at the penetration point. Use a seeded pseudorandom generator inside workers, with deterministic child seeds per simulation and chunk. A cryptographic source may create the initial seed only. Every strategy in a simulation receives its own shoe created from the same simulation seed (paired seeds). Record all seeds in exports.
 
 **Possible later optimisation.** Because round outcomes in bet units do not depend on bet size, one generated outcome stream per seed could be replayed for every strategy, cutting compute roughly in proportion to strategy count. It needs special handling where a double or split is unaffordable, so benchmark before adopting it.
 
 **Data model** (typed before any screens):
 
-- **Configuration:** experiment id, seed, strategy ids and versions, sessions, rounds, bankroll, table minimum, base bet, optional maximum, target mode and multiple, rules, checkpoint rounds, worker count.
-- **Strategy result per session:** session id, strategy id, seed, rounds played, starting and final bankroll, net profit, total wagered, round outcome counts, maximum and average wager, maximum drawdown, first-crossing rounds for each target, stop reason, unavailable-action count.
+- **Configuration:** experiment id, seed, strategy ids and versions, simulations, rounds, bankroll, table minimum, base bet, optional maximum, target mode and multiple, rules, checkpoint rounds, worker count.
+- **Strategy result per simulation:** simulation id, strategy id, seed, rounds played, starting and final bankroll, net profit, total wagered, round outcome counts, maximum and average wager, maximum drawdown, first-crossing rounds for each target, stop reason, unavailable-action count.
 - **Strategy state:** step or current wager, cycle profit for Oscar’s Grind, sequence index. The blackjack engine never reads it.
-- **Live aggregates:** sessions completed, rounds, sum and sum of squares of profit, status counts, target hits, bounded sample of sessions.
+- **Live aggregates:** simulations completed, rounds, sum and sum of squares of profit, status counts, target hits, bounded sample of simulations.
 
 ## 11. Roadmap
 
@@ -352,18 +352,18 @@ Build in this order. Each phase ends with a deliverable and exit criteria, and t
 
 **Exit criteria:** table-driven tests verify every transition after a win, loss, push, blackjack and a mixed split round, matching the Phase 1 worked examples; property tests confirm no bet is ever below the table minimum, above the bankroll or above the maximum without a recorded stop reason.
 
-### Phase 5 — Session-group simulator and statistics
+### Phase 5 — Simulation-group simulator and statistics
 
 **Tasks**
 
-1. Run one session: every selected strategy gets its own bankroll, betting state and shoe created from the same session seed.
-2. Let each strategy stop independently (target reached, bust, blocked, round limit), freeze its profit, and end the session when all have stopped.
+1. Run one simulation: every selected strategy gets its own bankroll, betting state and shoe created from the same simulation seed.
+2. Let each strategy stop independently (target reached, bust, blocked, round limit), freeze its profit, and end the simulation when all have stopped.
 3. Implement the three target modes, recording the first round at which each threshold is crossed.
 4. Track total wagered, maximum wager, maximum drawdown, outcome counts and the unavailable-action counter.
 5. Record profit at the user-chosen checkpoint rounds, carrying frozen profit forward for stopped strategies.
 6. Implement online statistics (running mean and variance), exact percentiles from compact typed arrays, fixed-bin histograms for checkpoints, Wilson intervals and the return-per-unit-wagered interval.
 
-**Deliverable:** a deterministic session result and an aggregate summary for any configuration, with no UI.
+**Deliverable:** a deterministic simulation result and an aggregate summary for any configuration, with no UI.
 
 **Exit criteria:** the same seed and configuration give identical results; final bankroll equals starting bankroll plus net profit to the cent; first-crossing rounds are correctly ordered; aggregates match a hand calculation on a small known set.
 
@@ -401,10 +401,10 @@ Build in this order. Each phase ends with a deliverable and exit criteria, and t
 
 1. Complete the setup screen: all inputs, validation messages, calculated target amounts and the pre-run work and runtime estimate with the budget warning.
 2. Build the live screen: per-strategy progress and status counts, provisional statistics, the per-simulation comparison grid (n panels, default 6, maximum 25), live histogram, worker status and Stop All.
-3. Build the final dashboard: summary cards, sortable comparison table with ranking explanations, checkpoint chart with percentile bands, distribution, target attainment, drawdown, bet progression and sample sessions, with toggles, zoom and click-through.
+3. Build the final dashboard: summary cards, sortable comparison table with ranking explanations, checkpoint chart with percentile bands, distribution, target attainment, drawdown, bet progression and sample simulations, with toggles, zoom and click-through.
 4. Add confidence intervals, small-sample warnings and “best under this configuration” wording.
 5. Build the standalone HTML report: one file with the chart library, report styling and data embedded, opening offline with working interactions.
-6. Build both CSV files (summary and per-session), written in chunks with a size warning, and the JSON configuration download.
+6. Build both CSV files (summary and per-simulation), written in chunks with a size warning, and the JSON configuration download.
 7. Save recent experiment summaries in browser storage.
 
 **Deliverable:** the complete experience from setup to downloadable reports.
@@ -415,9 +415,9 @@ Build in this order. Each phase ends with a deliverable and exit criteria, and t
 
 **Tasks**
 
-1. Benchmark 500, 5,000, 20,000 and 50,000 sessions with 1, 2, 3 and 4 workers, and record rounds per second.
+1. Benchmark 500, 5,000, 20,000 and 50,000 simulations with 1, 2, 3 and 4 workers, and record rounds per second.
 2. Test on a low-power laptop and a typical desktop; profile main-thread responsiveness, memory and message frequency.
-3. Set the final caps for sessions, rounds and total work from the measurements.
+3. Set the final caps for simulations, rounds and total work from the measurements.
 4. Cross-check results against independent reference calculations where possible.
 5. Check accessibility, keyboard use, responsive layouts and the main browsers (Chrome, Firefox, Safari, Edge).
 6. Test cancelling a heavy run, then starting a fresh one.
@@ -454,7 +454,7 @@ Build in this order. Each phase ends with a deliverable and exit criteria, and t
 
 - Final bankroll equals starting bankroll plus net profit.
 - Same seed and configuration give the same result; paired seeds are consistent across strategies.
-- Strategies stop independently; a stopped strategy’s profit is frozen; the session ends only when every strategy has stopped.
+- Strategies stop independently; a stopped strategy’s profit is frozen; the simulation ends only when every strategy has stopped.
 - First-crossing rounds are correct and ordered (0.5x no later than 1x, and so on).
 - Aggregates match a hand calculation on a small known set.
 - Flat betting reproduces the published house edge within confidence intervals.
@@ -479,11 +479,11 @@ Cloudflare Pages serves the static Vite build, GitHub holds code and runs checks
 | Browser overload | Worker cap, total-round budget, throttled updates, bounded live curves |
 | Memory growth | Online statistics, typed arrays, histograms, chunked export |
 | Floating-point money errors | Integer currency units |
-| Oversized HTML report | Bounded session sample, embedded data only |
+| Oversized HTML report | Bounded simulation sample, embedded data only |
 
 ## 15. Future enhancements
 
-D’Alembert, Fibonacci and percentage-of-bankroll systems; a custom strategy builder; capped-bet variants (such as capped Martingale) as separately named strategies; dealer no-hole-card rules; session replay; comparing two experiments side by side; shared outcome-stream optimisation; optional WebAssembly engine if profiling demands it; cloud save and share.
+D’Alembert, Fibonacci and percentage-of-bankroll systems; a custom strategy builder; capped-bet variants (such as capped Martingale) as separately named strategies; dealer no-hole-card rules; simulation replay; comparing two experiments side by side; shared outcome-stream optimisation; optional WebAssembly engine if profiling demands it; cloud save and share.
 
 ## 16. Initial defaults
 
@@ -494,7 +494,7 @@ D’Alembert, Fibonacci and percentage-of-bankroll systems; a custom strategy bu
 | Table minimum / starting bet | 20 / 20 |
 | Table maximum | None (optional) |
 | Simulations | 5,000 |
-| Rounds per session | 1,000 |
+| Rounds per simulation | 1,000 |
 | Target mode | None; user can choose single target or compare all four |
 | Paroli classic streak | 3 |
 | Rules | 6 decks, S17, 3:2, double after split, no surrender, 75% penetration |
@@ -510,4 +510,4 @@ With the defaults, total work is 5,000 × 5 × 1,000 = 25 million rounds. Expect
 1. “Blocked by table maximum” is reported separately from “bust”.
 2. Default checkpoints are 50, 100, 250, 500 and 1,000 rounds.
 3. European no-hole-card rules stay out of the MVP.
-4. Per-session CSV covers every session; the HTML report embeds only a sample.
+4. Per-simulation CSV covers every simulation; the HTML report embeds only a sample.
