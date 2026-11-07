@@ -1,0 +1,25 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors and OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Environment
+.env
+.env.*
+
+# Claude Code personal settings (shared settings live in .claude/settings.json)
+.claude/settings.local.json
+
+# Cloudflare
+.wrangler/
