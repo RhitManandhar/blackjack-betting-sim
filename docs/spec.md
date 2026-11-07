@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Spec version | **2.0** (frozen 7 November 2026) |
+| Spec version | **2.1** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026) |
 | Results schema version | 1 |
 | Based on | [Project Plan v2](project-plan-v2.md) |
 | Status | **Frozen** 7 November 2026. Decisions D1–D19 and assumptions A1–A4 confirmed by the project owner. Changes need a version bump and a changelog entry (section 13). |
@@ -15,7 +15,7 @@ Notation: all money is stored as **integer cents**. Tables in this document show
 
 ## 1. Core definitions
 
-**Session (simulation).** One seeded run in which every selected strategy plays from the same starting bankroll. The "number of simulations" input is the number of sessions. Sessions are numbered from `0`.
+**Simulation.** One seeded run in which every selected strategy plays from the same starting bankroll until each strategy stops. The "number of simulations" input is the number of these runs. Simulations are numbered from `0` internally and shown to the user as 1, 2, 3 and so on. A simulation is **not** a number of rounds: it contains up to `roundLimit` rounds per strategy. (Spec 2.0 and the plan's first draft called this a "session"; that word is no longer used for it.)
 
 **Round.** One initial player hand and everything it triggers: dealer peek, splits, doubles, surrender, dealer play and settlement. Rounds are counted per strategy, starting at `1`.
 
@@ -46,19 +46,19 @@ This covers blackjacks, doubles, splits, surrender and dealer blackjack alike. A
 
 The four counts always sum to rounds played.
 
-**Cumulative profit.** The sum of net round profit over all rounds played so far by that strategy in that session. Bankroll is always `starting bankroll + cumulative profit`.
+**Cumulative profit.** The sum of net round profit over all rounds played so far by that strategy in that simulation. Bankroll is always `starting bankroll + cumulative profit`.
 
 ---
 
-## 2. Session group and stopping
+## 2. Simulation group and stopping
 
-### 2.1 Session group
+### 2.1 Simulation group
 
-Each selected strategy in a session has:
+Each selected strategy in a simulation has:
 
 - its own bankroll, starting at the configured starting bankroll;
 - its own betting state, initialised fresh;
-- its own shoe and RNG, created from the **same session seed** (section 8).
+- its own shoe and RNG, created from the **same simulation seed** (section 8).
 
 Strategies never read each other's state. Because the shoes start identical, all strategies see the same cards until something makes one of them use a different number of cards, for example an unaffordable double or split (section 5.4) or a different stake on a split hand. After that their cards may differ. This is expected.
 
@@ -90,7 +90,7 @@ The same check (steps 4–7) also runs before round 1. Configuration validation 
 
 ### 2.3 Independent stopping
 
-A stopped strategy freezes its bankroll and profit, takes no further bets and stops drawing cards. The others keep playing. The session ends when every strategy has stopped. The round limit applies to each strategy, so every session ends.
+A stopped strategy freezes its bankroll and profit, takes no further bets and stops drawing cards. The others keep playing. The simulation ends when every strategy has stopped. The round limit applies to each strategy, so every simulation ends.
 
 ### 2.4 Stop reasons
 
@@ -101,7 +101,7 @@ A stopped strategy freezes its bankroll and profit, takes no further bets and st
 | `blocked_table_max` | The next required bet is greater than the table maximum |
 | `round_limit` | The strategy played the configured number of rounds |
 
-`cancelled` is a **run status**, not a stop reason (section 10.4). Sessions that did not finish in a cancelled run are left out of the results. They are never counted under any stop reason.
+`cancelled` is a **run status**, not a stop reason (section 10.4). Simulations that did not finish in a cancelled run are left out of the results. They are never counted under any stop reason.
 
 ---
 
@@ -451,7 +451,7 @@ Sequence: `W, BJ, W, P, DW, L, S0, DL, L, W, S+, S−, W, BJ`.
 
 Overshoot count 0 throughout.
 
-### 7.7 Session results for the shared sequence
+### 7.7 Simulation results for the shared sequence
 
 Total wagered counts every stake (doubles and split hands included). Max wager is the largest **initial bet**. Max drawdown is defined in section 10.1.
 
@@ -494,7 +494,7 @@ Same setup as 7.1 unless stated. Each line is: starting state → outcome(s) →
 | X6 | Paroli 1-3-2-6, single target 0.5x (+250) | shared sequence | profit 390 after round 5 → `target_reached`, rounds played 5, first crossing `0_5x` = 5, others blank |
 | X7 | Paroli 1-3-2-6, `compare_all` | shared sequence | first crossing `0_5x` = 5; `1x`, `2x`, `2_5x` blank after 14 rounds; still playing |
 | X8 | Any, round limit 5, target reached in round 5 | — | `target_reached`, not `round_limit` |
-| X9 | One session, Flat and Martingale, bankroll 50 each | L, L | Martingale: bet 20, bankroll 30, requires 40 → `bust` after 1 round, frozen at 30.00. Flat keeps playing: bet 20, 20, bankroll 10 → `bust` after 2 rounds. The session ends only once both have stopped |
+| X9 | One simulation, Flat and Martingale, bankroll 50 each | L, L | Martingale: bet 20, bankroll 30, requires 40 → `bust` after 1 round, frozen at 30.00. Flat keeps playing: bet 20, 20, bankroll 10 → `bust` after 2 rounds. The simulation ends only once both have stopped |
 
 ### 7.10 Funds-short case
 
@@ -510,19 +510,19 @@ Same setup as 7.1 unless stated. Each line is: starting state → outcome(s) →
 ### 8.1 Seeds
 
 - **Experiment seed:** unsigned 32-bit integer (0 to 4,294,967,295). Entered manually or created once in the UI by `crypto.getRandomValues`. Never created inside `src/engine`.
-- **Session seed:** derived only from the experiment seed and the session index, so chunking, worker count and scheduling cannot affect it:
+- **Simulation seed:** derived only from the experiment seed and the simulation index, so chunking, worker count and scheduling cannot affect it:
 
   ```
-  sessionSeed(i) = fmix32((experimentSeed + (i + 1) × 0x9E3779B9) mod 2^32)
+  simulationSeed(i) = fmix32((experimentSeed + (i + 1) × 0x9E3779B9) mod 2^32)
   ```
 
-  `fmix32` is the MurmurHash3 32-bit finaliser. Chunks do not need seeds of their own; a chunk is just a range of session indices.
-- **Every session in an experiment gets a different seed.** This is guaranteed, not left to chance. `i ↦ (experimentSeed + (i + 1) × 0x9E3779B9) mod 2^32` is one-to-one for `i < 2^32`, because the multiplier is odd, and `fmix32` is a bijection. So `sessionSeed(i) ≠ sessionSeed(j)` whenever `i ≠ j`, far beyond the 50,000-session cap. A unit test checks there are no duplicates over the full cap.
-- All strategies in session `i` create their RNG from `sessionSeed(i)` (paired seeds). This sharing within a session is deliberate, so the strategies are compared on the same cards. Seeds differ only *between* sessions.
+  `fmix32` is the MurmurHash3 32-bit finaliser. Chunks do not need seeds of their own; a chunk is just a range of simulation indices.
+- **Every simulation in an experiment gets a different seed.** This is guaranteed, not left to chance. `i ↦ (experimentSeed + (i + 1) × 0x9E3779B9) mod 2^32` is one-to-one for `i < 2^32`, because the multiplier is odd, and `fmix32` is a bijection. So `simulationSeed(i) ≠ simulationSeed(j)` whenever `i ≠ j`, far beyond the 50,000-simulation cap. A unit test checks there are no duplicates over the full cap.
+- All strategies in simulation `i` create their RNG from `simulationSeed(i)` (paired seeds). This sharing within a simulation is deliberate, so the strategies are compared on the same cards. Seeds differ only *between* simulations.
 
 ### 8.2 Generator
 
-- PRNG: **xoshiro128\*\***, with its 128-bit state filled by four outputs of **splitmix32** seeded with the session seed.
+- PRNG: **xoshiro128\*\***, with its 128-bit state filled by four outputs of **splitmix32** seeded with the simulation seed.
 - Bounded integers in `[0, n)` use an unbiased rejection method. Phase 3 pins the exact method and the first outputs for known seeds as test vectors.
 - Changing the generator, seeding or shuffle changes every result. That requires a spec version bump.
 
@@ -534,7 +534,7 @@ Same setup as 7.1 unless stated. Each line is: starting state → outcome(s) →
 
 ### 8.4 Determinism contract
 
-The same configuration and experiment seed always give identical per-session results and identical aggregates, whether run with 1, 2, 3 or 4 workers and whatever the chunk size.
+The same configuration and experiment seed always give identical per-simulation results and identical aggregates, whether run with 1, 2, 3 or 4 workers and whatever the chunk size.
 
 ---
 
@@ -543,10 +543,10 @@ The same configuration and experiment seed always give identical per-session res
 ```ts
 interface ExperimentConfig {
   schemaVersion: 1;
-  specVersion: "2.0";
+  specVersion: "2.1";
   experimentId: string;              // created in the UI
   experimentSeed: number;            // uint32
-  sessions: number;                  // 1 .. 50_000 (soft cap, final value from Phase 9)
+  simulations: number;                  // 1 .. 50_000 (soft cap, final value from Phase 9)
   roundLimit: number;                // 1 .. 10_000
   currency: "AUD";                   // display only
   startingBankroll: Cents;           // > 0
@@ -559,7 +559,7 @@ interface ExperimentConfig {
   paroliStreakLength: number;        // 2 .. 5, default 3
   rules: RuleSet;                    // section 5.1
   checkpoints: number[];             // ascending, unique, each 1..roundLimit; default [50,100,250,500,1000]
-  displayedSessions: number;         // n panels in the comparison grid: 1 .. min(25, sessions), default 6
+  displayedSimulations: number;         // n panels in the comparison grid: 1 .. min(25, simulations), default 6
   workerCount: "auto" | 1 | 2 | 3 | 4;
 }
 ```
@@ -568,21 +568,21 @@ Rules:
 
 - Validate with Zod at every boundary: form input, imported JSON and worker messages.
 - Checkpoints above the round limit are removed, and the UI says so.
-- Total work = `sessions × strategies × roundLimit` (an upper bound). Over about 100 million rounds triggers a warning before the run.
+- Total work = `simulations × strategies × roundLimit` (an upper bound). Over about 100 million rounds triggers a warning before the run.
 - Changing `workerCount` never changes results (8.4). It is stored only to describe the run.
-- `displayedSessions` affects only what is drawn, never results. If it is larger than `sessions`, it is lowered to `sessions` and the UI says so.
+- `displayedSimulations` affects only what is drawn, never results. If it is larger than `simulations`, it is lowered to `simulations` and the UI says so.
 - Money inputs are typed in currency units and converted to cents once, at the form boundary.
 
 ---
 
 ## 10. Results, statistics and exports
 
-### 10.1 Per-session strategy result
+### 10.1 Per-simulation strategy result
 
 ```ts
-interface StrategySessionResult {
-  sessionId: number;
-  sessionSeed: number;
+interface StrategySimulationResult {
+  simulationId: number;
+  simulationSeed: number;
   strategyId: StrategyId;
   strategyVersion: string;
   roundsPlayed: number;
@@ -610,36 +610,36 @@ interface StrategySessionResult {
 
 ### 10.2 Statistics definitions
 
-All are per strategy over completed sessions `n`. The UI shows `n` next to every percentage and average.
+All are per strategy over completed simulations `n`. The UI shows `n` next to every percentage and average.
 
 | Statistic | Definition |
 | --- | --- |
 | Mean, SD | Sample mean and sample standard deviation (`n − 1`) of net profit, computed from exact integer sums |
-| Percentiles (5, 25, 50, 75, 95) | Linear interpolation between closest ranks (Hyndman–Fan type 7, same as numpy's default and Excel `PERCENTILE.INC`) on the sorted per-session values |
+| Percentiles (5, 25, 50, 75, 95) | Linear interpolation between closest ranks (Hyndman–Fan type 7, same as numpy's default and Excel `PERCENTILE.INC`) on the sorted per-simulation values |
 | Profit / break-even / loss share | `netProfit > 0`, `= 0`, `< 0` |
-| Return per unit wagered | `R = Σ netProfit / Σ totalWagered` over sessions |
+| Return per unit wagered | `R = Σ netProfit / Σ totalWagered` over simulations |
 | CI for R | Ratio estimator: `SE = sqrt( Σ (pᵢ − R·wᵢ)² / (n(n−1)) ) / mean(w)`; 95% interval `R ± 1.96·SE` |
 | CI for a mean | `mean ± 1.96·SD/√n` |
 | CI for a proportion | Wilson score interval, 95% (`z = 1.959964`) |
-| Hit rate for target t | Share of sessions with `firstCrossing[t] ≠ null`, Wilson CI |
-| Rounds to target t | Mean (and median) of `firstCrossing[t]` over sessions that crossed it |
-| Bust before target t | Share of sessions with stop reason `bust` and `firstCrossing[t] = null` |
+| Hit rate for target t | Share of simulations with `firstCrossing[t] ≠ null`, Wilson CI |
+| Rounds to target t | Mean (and median) of `firstCrossing[t]` over simulations that crossed it |
+| Bust before target t | Share of simulations with stop reason `bust` and `firstCrossing[t] = null` |
 | Bust rate / block rate | Share with stop reason `bust` / `blocked_table_max` |
 | Average wager | `Σ sumInitialBets / Σ roundsPlayed` |
 | Outcome frequencies | Category count / total rounds played |
 
 Statistics may be fractional and are rounded to cents only for display. Money totals stay integers. Exact integer accumulators are used so merge order cannot change results; where a sum of squares could exceed 2^53 it uses `BigInt`.
 
-**Inconclusive.** When two strategies' 95% intervals for a compared metric overlap, the difference is described as inconclusive. Fewer than 100 completed sessions triggers a small-sample warning.
+**Inconclusive.** When two strategies' 95% intervals for a compared metric overlap, the difference is described as inconclusive. Fewer than 100 completed simulations triggers a small-sample warning.
 
 ### 10.3 Checkpoint aggregates
 
-Per checkpoint and strategy: count, exact integer sum of profit, sum of squares, count profitable, minimum (worst loss), and a fixed-bin histogram. Checkpoint percentiles (5th–95th) come from the histogram and are labelled approximate. The bin layout depends only on the configuration, never on the data, so every worker uses the same bins. It has fixed-width bins plus underflow and overflow bins. Phase 5 picks the exact range and bin count and records the reason here (spec 2.1).
+Per checkpoint and strategy: count, exact integer sum of profit, sum of squares, count profitable, minimum (worst loss), and a fixed-bin histogram. Checkpoint percentiles (5th–95th) come from the histogram and are labelled approximate. The bin layout depends only on the configuration, never on the data, so every worker uses the same bins. It has fixed-width bins plus underflow and overflow bins. Phase 5 picks the exact range and bin count and records the reason here, with a spec version bump.
 
 ### 10.4 Run status
 
-- `complete`: every session finished.
-- `cancelled`: the user pressed Stop All. Results cover only fully finished sessions, the count of finished sessions is shown, and everything is labelled **partial**. A partly played session is thrown away, never counted.
+- `complete`: every simulation finished.
+- `cancelled`: the user pressed Stop All. Results cover only fully finished simulations, the count of finished simulations is shown, and everything is labelled **partial**. A partly played simulation is thrown away, never counted.
 
 ### 10.5 CSV conventions
 
@@ -649,7 +649,7 @@ UTF-8, comma-separated, header row, `.` as the decimal separator. Money columns 
 
 ```
 experiment_id, experiment_seed, spec_version, run_status, currency,
-strategy_id, strategy_version, sessions,
+strategy_id, strategy_version, simulations,
 status_target_reached, status_bust, status_blocked_table_max, status_round_limit,
 share_profit, share_profit_ci_low, share_profit_ci_high, share_break_even, share_loss,
 profit_mean, profit_mean_ci_low, profit_mean_ci_high, profit_sd,
@@ -667,22 +667,22 @@ freq_blackjack, freq_win, freq_push, freq_loss,
 unavailable_actions, minimum_overshoot_count
 ```
 
-`total_wagered` is summed over all sessions. `max_wager` and `max_drawdown` are maximums over sessions. `profit_upside_truncated` is `true` when a target mode was active.
+`total_wagered` is summed over all simulations. `max_wager` and `max_drawdown` are maximums over simulations. `profit_upside_truncated` is `true` when a target mode was active.
 
-### 10.7 CSV 2 — per session (one row per session per strategy)
+### 10.7 CSV 2 — per simulation (one row per simulation per strategy)
 
 ```
-experiment_id, session_id, session_seed, strategy_id, strategy_version,
+experiment_id, simulation_id, simulation_seed, strategy_id, strategy_version,
 rounds_played, final_bankroll, net_profit, total_wagered, max_wager, max_drawdown,
 first_cross_0_5x, first_cross_1x, first_cross_2x, first_cross_2_5x,
 stop_reason, unavailable_actions, minimum_overshoot_count
 ```
 
-Rows are ordered by `session_id`, then by strategy in configuration order. Every completed session is included, written in chunks with a size warning.
+Rows are ordered by `simulation_id`, then by strategy in configuration order. Every completed simulation is included, written in chunks with a size warning.
 
 ### 10.8 HTML report and JSON
 
-- The HTML report embeds at most 500 sessions per strategy: the first 500 by `session_id`, so the sample is deterministic.
+- The HTML report embeds at most 500 simulations per strategy: the first 500 by `simulation_id`, so the sample is deterministic.
 - The JSON download is the `ExperimentConfig` (section 9). Importing it and running again reproduces the run exactly.
 
 ---
@@ -691,12 +691,12 @@ Rows are ordered by `session_id`, then by strategy in configuration order. Every
 
 The grid lets the user see, for individual simulations, how every chosen strategy fared on the same cards.
 
-- **Which simulations:** sessions `0 … n−1`, where `n = displayedSessions`, labelled "Simulation 1 … n" with their session seed. Fixed indices keep the choice deterministic and independent of worker count. Chunks are queued in session order, so these sessions are among the first to finish.
+- **Which simulations:** simulations `0 … n−1`, where `n = displayedSimulations`, labelled "Simulation 1 … n" with their simulation seed. Fixed indices keep the choice deterministic and independent of worker count. Chunks are queued in simulation order, so these simulations are among the first to finish.
 - **One panel per simulation:** each panel overlays one bankroll line per chosen strategy on a shared round axis, starting at round 0 (the starting bankroll). It shows reference lines for the starting bankroll and the active target, and a legend with strategy toggles.
-- **Downsampling:** for displayed sessions only, the worker records each strategy's bankroll at round 0, at every `k`-th round where `k = max(1, ceil(roundLimit / 200))`, and at that strategy's final round. That is at most about 202 points per strategy per panel. Non-displayed sessions record no curve data.
-- **Delivery:** curve points travel in the **chunk result** message for the chunk that contains the session, never in progress messages and never per round. A panel fills in when that chunk result arrives. The run is never slowed or paced for display. Panels not yet filled show "running".
+- **Downsampling:** for displayed simulations only, the worker records each strategy's bankroll at round 0, at every `k`-th round where `k = max(1, ceil(roundLimit / 200))`, and at that strategy's final round. That is at most about 202 points per strategy per panel. Non-displayed simulations record no curve data.
+- **Delivery:** curve points travel in the **chunk result** message for the chunk that contains the simulation, never in progress messages and never per round. A panel fills in when that chunk result arrives. The run is never slowed or paced for display. Panels not yet filled show "running".
 - **Stopped strategies:** a strategy's line ends at its final round with a marker showing its stop reason (`target_reached`, `bust`, `blocked_table_max`, `round_limit`). It is not carried forward in the panel. Checkpoint charts still carry frozen profit forward (10.1).
-- **Cancelled runs:** panels whose session did not finish show "not finished (run cancelled)". They are never drawn from partial data.
+- **Cancelled runs:** panels whose simulation did not finish show "not finished (run cancelled)". They are never drawn from partial data.
 - **Interaction:** clicking a panel enlarges it with tooltips (round, bankroll, bet) and zoom. The same grid appears on the final dashboard and in the HTML report.
 - Curve points are display data only. Statistics never use them.
 
@@ -707,7 +707,7 @@ The grid lets the user see, for individual simulations, how every chosen strateg
 | A1 | "Blocked by table maximum" is reported separately from "bust" | Confirmed |
 | A2 | Default checkpoints are 50, 100, 250, 500, 1,000 rounds | Confirmed |
 | A3 | European no-hole-card rules stay out of the MVP | Confirmed |
-| A4 | Per-session CSV covers every session; the HTML report embeds only a sample | Confirmed |
+| A4 | Per-simulation CSV covers every simulation; the HTML report embeds only a sample | Confirmed |
 
 ## 12. Decisions made at freeze
 
@@ -725,18 +725,19 @@ These close gaps the plan left open. All are confirmed by the project owner (7 N
 | D8 | Oscar's Grind overshoot is recorded as a count and a total in cents; excess cycle profit is discarded when a cycle closes | 4.3 |
 | D9 | Max wager = largest initial bet; total wagered includes all stakes | 7.7, 10.1 |
 | D10 | Funds-short fallback = best affordable action by solver EV; available funds = bankroll minus stakes already in the round | 5.4 |
-| D11 | Seeds: uint32 experiment seed, per-session derivation by index (no per-chunk seeds); xoshiro128\*\* + splitmix32 | 8 |
+| D11 | Seeds: uint32 experiment seed, per-simulation derivation by index (no per-chunk seeds); xoshiro128\*\* + splitmix32 | 8 |
 | D12 | Reshuffle only between rounds, no burn card | 8.3 |
-| D13 | A cancelled run keeps only fully finished sessions | 10.4 |
-| D14 | Percentiles use type-7 interpolation; inconclusive = overlapping 95% intervals; small-sample warning below 100 sessions | 10.2 |
+| D13 | A cancelled run keeps only fully finished simulations | 10.4 |
+| D14 | Percentiles use type-7 interpolation; inconclusive = overlapping 95% intervals; small-sample warning below 100 simulations | 10.2 |
 | D15 | CSV additions to the plan's list: `experiment_id`, `minimum_overshoot_count`, and run status in the summary file | 10.6, 10.7 |
 | D16 | Any two 10-value cards count as a pair | 5.3 |
-| D17 | Every session gets a unique seed (proved by construction, checked by test); strategies within a session share it | 8.1 |
-| D18 | The per-simulation comparison grid shows sessions 1…n, filled when each finishes, never animated or throttled | 10.9 |
-| D19 | `displayedSessions` default 6, maximum 25, never more than `sessions` | 9, 10.9 |
+| D17 | Every simulation gets a unique seed (proved by construction, checked by test); strategies within a simulation share it | 8.1 |
+| D18 | The per-simulation comparison grid shows simulations 1…n, filled when each finishes, never animated or throttled | 10.9 |
+| D19 | `displayedSimulations` default 6, maximum 25, never more than `simulations` | 9, 10.9 |
 
 ## 13. Changelog
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 2.0 | 2026-11-07 | Frozen from Project Plan v2. Added exact definitions, worked examples, schemas and CSV columns. Pre-freeze review added the unique-seed guarantee and the per-simulation comparison grid (D17–D19). |
+| 2.1 | 2026-11-08 | Terminology only, no behaviour change: "session" renamed to "simulation" everywhere, including identifiers and CSV columns (`simulations`, `displayedSimulations`, `simulationSeed`, `StrategySimulationResult`, `simulation_id`, `simulation_seed`). Results schema stays at version 1 because nothing had been exported yet. |
