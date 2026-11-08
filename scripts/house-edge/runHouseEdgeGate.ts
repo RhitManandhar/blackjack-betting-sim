@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest';
-import { createRoundContext, createRoundResult, playRound } from '../../src/engine/blackjack/round';
+import {
+  createRoundContext,
+  createRoundSettlement,
+  playRound,
+} from '../../src/engine/blackjack/round';
 import { createShoe } from '../../src/engine/blackjack/shoe';
 import { Rng, simulationSeed } from '../../src/engine/simulation/rng';
 import { BASELINE_RULES } from '../../src/shared/defaults';
@@ -40,7 +44,7 @@ export function houseEdgeGate(
       const rules = { ...BASELINE_RULES, decks, soft17, doubleAfterSplit, blackjackPayout: payout };
       const published = publishedHouseEdge(decks, soft17, doubleAfterSplit, payout);
       const context = createRoundContext(rules);
-      const result = createRoundResult();
+      const result = createRoundSettlement();
       const simulations = Math.floor(roundsToRun() / ROUNDS_PER_SIMULATION);
       const rounds = simulations * ROUNDS_PER_SIMULATION;
 

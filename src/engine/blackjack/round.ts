@@ -22,7 +22,7 @@ export const Outcome = {
 
 export type Outcome = (typeof Outcome)[keyof typeof Outcome];
 
-export interface RoundResult {
+export interface RoundSettlement {
   netProfit: number;
   totalWagered: number;
   outcome: Outcome;
@@ -30,7 +30,7 @@ export interface RoundResult {
   reshuffled: boolean;
 }
 
-export function createRoundResult(): RoundResult {
+export function createRoundSettlement(): RoundSettlement {
   return {
     netProfit: 0,
     totalWagered: 0,
@@ -132,7 +132,7 @@ export function playRound(
   shoe: Shoe,
   bet: number,
   bankrollBefore: number,
-  result: RoundResult,
+  result: RoundSettlement,
 ): void {
   if (!Number.isSafeInteger(bet) || bet <= 0 || bet > bankrollBefore) {
     throw new RangeError(`Invalid bet ${bet} for bankroll ${bankrollBefore}`);
@@ -224,7 +224,7 @@ function settle(
   upcard: number,
   holeCard: number,
   handCount: number,
-  result: RoundResult,
+  result: RoundSettlement,
 ): void {
   let anyStanding = false;
   for (let hand = 0; hand < handCount; hand += 1) {
