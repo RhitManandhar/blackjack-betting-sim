@@ -33,55 +33,104 @@ function roundsToRun(): number {
   return fromEnvironment;
 }
 
+import type { RuleSet } from '../../src/shared/schema';
+
+function describeRules(rules: RuleSet): string {
+  const parts = [
+    `${String(rules.decks)} deck(s)`,
+    rules.soft17,
+    rules.doubleAfterSplit ? 'DAS' : 'no DAS',
+    rules.blackjackPayout,
+  ];
+  if (rules.lateSurrender) parts.push('late surrender');
+  if (rules.doubleOn !== 'any-two') parts.push(`double ${rules.doubleOn}`);
+  if (rules.maxSplitHands !== 4) parts.push(`max ${String(rules.maxSplitHands)} hands`);
+  if (rules.resplitAces) parts.push('re-split aces');
+  if (rules.penetrationPercent !== 75)
+    parts.push(`${String(rules.penetrationPercent)}% penetration`);
+  return parts.join(', ');
+}
+
+/** One gated rule set: changes from the 6-deck baseline. */
+export function houseEdgeGateFor(change: Partial<RuleSet>): void {
+  const rules: RuleSet = { ...BASELINE_RULES, ...change };
+  const name = describeRules(rules);
+  it(name, { timeout: 3_600_000 }, () => {
+    const published = publishedHouseEdge(rules);
+    const context = createRoundContext(rules);
+    const result = createRoundSettlement();
+    const simulations = Math.floor(roundsToRun() / ROUNDS_PER_SIMULATION);
+    const rounds = simulations * ROUNDS_PER_SIMULATION;
+
+    let sumHalfBets = 0;
+    let sumSquaresHalfBets = 0;
+    let unavailable = 0;
+    for (let simulation = 0; simulation < simulations; simulation += 1) {
+      const shoe = createShoe(
+        rules.decks,
+        rules.penetrationPercent,
+        new Rng(simulationSeed(GATE_SEED, simulation)),
+      );
+      for (let round = 0; round < ROUNDS_PER_SIMULATION; round += 1) {
+        playRound(context, shoe, BET, Number.MAX_SAFE_INTEGER, result);
+        const halfBets = result.netProfit / HALF_BET;
+        sumHalfBets += halfBets;
+        sumSquaresHalfBets += halfBets * halfBets;
+        unavailable += result.unavailableActions;
+      }
+    }
+
+    const meanPerBet = sumHalfBets / 2 / rounds;
+    const variancePerBet =
+      (sumSquaresHalfBets / 4 - rounds * meanPerBet * meanPerBet) / (rounds - 1);
+    const standardError = Math.sqrt(variancePerBet / rounds);
+    const edgePercent = -meanPerBet * 100;
+    const halfWidthPercent = Z_99 * standardError * 100;
+    const summary =
+      `${name}: simulated ${edgePercent.toFixed(4)}% ± ${halfWidthPercent.toFixed(4)}% (99%), ` +
+      `published ${published.toFixed(4)}%, difference ${(edgePercent - published).toFixed(4)}%, ` +
+      `${String(rounds)} rounds, SD per round ${Math.sqrt(variancePerBet).toFixed(4)} bets`;
+    console.log(summary);
+
+    expect(unavailable, 'an unlimited bankroll never makes an action unavailable').toBe(0);
+    expect(Math.abs(edgePercent - published), summary).toBeLessThanOrEqual(halfWidthPercent);
+  });
+}
+
+/** Tier 1: one deck count, soft-17 rule and DAS setting, at both payouts. */
 export function houseEdgeGate(
   decks: 6 | 8,
   soft17: 'S17' | 'H17',
   doubleAfterSplit: boolean,
 ): void {
-  for (const payout of ['3:2', '6:5'] as const) {
-    const name = `${String(decks)} decks, ${soft17}, ${doubleAfterSplit ? 'DAS' : 'no DAS'}, ${payout}`;
-    it(name, { timeout: 3_600_000 }, () => {
-      const rules = { ...BASELINE_RULES, decks, soft17, doubleAfterSplit, blackjackPayout: payout };
-      const published = publishedHouseEdge(decks, soft17, doubleAfterSplit, payout);
-      const context = createRoundContext(rules);
-      const result = createRoundSettlement();
-      const simulations = Math.floor(roundsToRun() / ROUNDS_PER_SIMULATION);
-      const rounds = simulations * ROUNDS_PER_SIMULATION;
-
-      let sumHalfBets = 0;
-      let sumSquaresHalfBets = 0;
-      let unavailable = 0;
-      for (let simulation = 0; simulation < simulations; simulation += 1) {
-        const shoe = createShoe(
-          decks,
-          rules.penetrationPercent,
-          new Rng(simulationSeed(GATE_SEED, simulation)),
-        );
-        for (let round = 0; round < ROUNDS_PER_SIMULATION; round += 1) {
-          playRound(context, shoe, BET, Number.MAX_SAFE_INTEGER, result);
-          const halfBets = result.netProfit / HALF_BET;
-          sumHalfBets += halfBets;
-          sumSquaresHalfBets += halfBets * halfBets;
-          unavailable += result.unavailableActions;
-        }
-      }
-
-      const meanPerBet = sumHalfBets / 2 / rounds;
-      const variancePerBet =
-        (sumSquaresHalfBets / 4 - rounds * meanPerBet * meanPerBet) / (rounds - 1);
-      const standardError = Math.sqrt(variancePerBet / rounds);
-      const edgePercent = -meanPerBet * 100;
-      const halfWidthPercent = Z_99 * standardError * 100;
-      const summary =
-        `${name}: simulated ${edgePercent.toFixed(4)}% ± ${halfWidthPercent.toFixed(4)}% (99%), ` +
-        `published ${published.percent.toFixed(4)}%, difference ${(edgePercent - published.percent).toFixed(4)}%, ` +
-        `${String(rounds)} rounds, SD per round ${Math.sqrt(variancePerBet).toFixed(4)} bets`;
-      console.log(summary);
-
-      expect(unavailable, 'an unlimited bankroll never makes an action unavailable').toBe(0);
-      expect(Math.abs(edgePercent - published.percent), summary).toBeLessThanOrEqual(
-        halfWidthPercent,
-      );
-    });
+  for (const blackjackPayout of ['3:2', '6:5'] as const) {
+    houseEdgeGateFor({ decks, soft17, doubleAfterSplit, blackjackPayout });
   }
+}
+
+/**
+ * Tier 2 and 3 (Phase 7): every new deck count with S17/H17 and DAS on/off, then each other
+ * option one at a time from the 6-deck baseline, plus surrender with one deck and penetration
+ * at both ends of its range. Gate files take two entries each so they run in parallel.
+ */
+export const TIER2_GATE_SETS: readonly Partial<RuleSet>[] = [
+  ...([1, 2, 4] as const).flatMap((decks) =>
+    (['S17', 'H17'] as const).flatMap((soft17) =>
+      [true, false].map((doubleAfterSplit) => ({ decks, soft17, doubleAfterSplit })),
+    ),
+  ),
+  { lateSurrender: true },
+  { lateSurrender: true, soft17: 'H17' },
+  { lateSurrender: true, decks: 1 },
+  { doubleOn: '9-11' },
+  { doubleOn: '10-11' },
+  { maxSplitHands: 2 },
+  { maxSplitHands: 3 },
+  { resplitAces: true },
+  { penetrationPercent: 50 },
+  { penetrationPercent: 90 },
+];
+
+export function tier2GateGroup(group: number): void {
+  for (const change of TIER2_GATE_SETS.slice(group * 2, group * 2 + 2)) houseEdgeGateFor(change);
 }

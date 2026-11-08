@@ -1,9 +1,9 @@
 import { DEFAULTS, LIMITS } from '../../shared/constants';
-import { type ExperimentConfig, experimentConfigSchema } from '../../shared/schema';
+import { type ExperimentConfig, type RuleSet, experimentConfigSchema } from '../../shared/schema';
 import { STRATEGIES, STRATEGY_IDS, type StrategyId } from '../../shared/strategies';
 
-// Turns the minimal Phase 6 form into a validated ExperimentConfig. All other settings keep their
-// defaults until the full setup screen (Phase 8). Validation runs through the shared Zod schema,
+// Turns the run form into a validated ExperimentConfig. Table rules are editable from Phase 7;
+// the remaining settings keep their defaults until the full setup screen (Phase 8). Validation runs through the shared Zod schema,
 // the same one used for imported JSON and worker messages.
 
 export interface RunFormDraft {
@@ -12,6 +12,7 @@ export interface RunFormDraft {
   readonly seed: string;
   readonly strategies: readonly StrategyId[];
   readonly workerCount: ExperimentConfig['workerCount'];
+  readonly rules: RuleSet;
 }
 
 export type RunFormField = 'simulations' | 'roundLimit' | 'seed' | 'strategies' | 'form';
@@ -34,6 +35,7 @@ export function draftFromConfig(config: ExperimentConfig): RunFormDraft {
     seed: String(config.experimentSeed),
     strategies: config.strategies.map((strategy) => strategy.id),
     workerCount: config.workerCount,
+    rules: config.rules,
   };
 }
 
@@ -92,6 +94,7 @@ export function buildConfig(draft: RunFormDraft, base: ExperimentConfig): RunFor
       version: STRATEGIES[id].version,
     })),
     workerCount: draft.workerCount,
+    rules: draft.rules,
     checkpoints,
     displayedSimulations,
   });

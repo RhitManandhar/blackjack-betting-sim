@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultConfig } from '../../shared/defaults';
+import { assertSupportedRules } from '../../engine/blackjack/rules';
+import {
+  DECK_OPTIONS,
+  DOUBLE_OPTIONS,
+  PENETRATION_OPTIONS,
+  SPLIT_HAND_OPTIONS,
+} from './ruleOptions';
 import { type RunFormDraft, buildConfig, draftFromConfig } from './runFormConfig';
 
 const base = createDefaultConfig('experiment', 123);
@@ -57,5 +64,36 @@ describe('buildConfig', () => {
     const result = withDraft(change);
     expect(result.ok).toBe(false);
     expect(!result.ok && result.errors[field]).toBeTruthy();
+  });
+});
+
+describe('table rules from the form (Phase 7)', () => {
+  it('passes edited rules into the configuration', () => {
+    const rules = { ...base.rules, decks: 1 as const, lateSurrender: true, penetrationPercent: 60 };
+    const result = withDraft({ rules });
+    expect(result.ok && result.config.rules).toEqual(rules);
+  });
+
+  it('offers only options the schema and engine accept', () => {
+    for (const decks of DECK_OPTIONS) {
+      for (const doubleOn of DOUBLE_OPTIONS) {
+        for (const maxSplitHands of SPLIT_HAND_OPTIONS) {
+          for (const penetrationPercent of PENETRATION_OPTIONS) {
+            const rules = {
+              ...base.rules,
+              decks,
+              doubleOn: doubleOn.value,
+              maxSplitHands,
+              penetrationPercent,
+            };
+            const result = withDraft({ rules });
+            expect(result.ok).toBe(true);
+            expect(() => {
+              assertSupportedRules(rules);
+            }).not.toThrow();
+          }
+        }
+      }
+    }
   });
 });

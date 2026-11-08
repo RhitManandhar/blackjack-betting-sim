@@ -223,6 +223,100 @@ const CASES: Case[] = [
     totalWagered: 2001,
     outcome: Outcome.Blackjack,
   },
+  // Tier 2 (spec 2.6)
+  {
+    id: 'T2-S1',
+    situation: 'late surrender: hard 16 vs 10 gives up half the bet; the dealer does not play',
+    cards: [10, 10, 6, 7, 5],
+    rules: { lateSurrender: true },
+    netProfit: -1000,
+    totalWagered: 2000,
+    outcome: Outcome.Loss,
+    cardsUsed: 4,
+  },
+  {
+    id: 'T2-S2',
+    situation: 'late surrender on an odd bet: 20.01 loses 10.01 (house keeps the cent)',
+    cards: [10, 10, 6, 7],
+    rules: { lateSurrender: true },
+    bet: 2001,
+    netProfit: -1001,
+    totalWagered: 2001,
+    outcome: Outcome.Loss,
+  },
+  {
+    id: 'T2-S3',
+    situation: 'late surrender comes after the peek: dealer blackjack takes the whole bet',
+    cards: [10, 1, 6, 10],
+    rules: { lateSurrender: true },
+    netProfit: -2000,
+    totalWagered: 2000,
+    outcome: Outcome.Loss,
+  },
+  {
+    id: 'T2-S4',
+    situation: 'H17 with surrender: 8,8 vs ace surrenders instead of splitting',
+    cards: [8, 1, 8, 7],
+    rules: { lateSurrender: true, soft17: 'H17' },
+    netProfit: -1000,
+    totalWagered: 2000,
+    outcome: Outcome.Loss,
+  },
+  {
+    id: 'T2-D1',
+    situation: 'double on 10-11 only: hard 9 vs 4 hits instead of doubling, 19 beats 18',
+    cards: [6, 4, 3, 10, 10, 4],
+    rules: { doubleOn: '10-11' },
+    netProfit: 2000,
+    totalWagered: 2000,
+    outcome: Outcome.Win,
+  },
+  {
+    id: 'T2-D2',
+    situation: 'double on 9-11 only: soft 18 vs 4 stands instead of doubling, pushes 18',
+    cards: [1, 4, 7, 10, 4],
+    rules: { doubleOn: '9-11' },
+    netProfit: 0,
+    totalWagered: 2000,
+    outcome: Outcome.Push,
+  },
+  {
+    id: 'T2-D3',
+    situation: 'double on 9-11 with DAS: split 8s vs 6, 8,3 = 11 may still double (as G10)',
+    cards: [8, 6, 8, 10, 3, 10, 10, 4],
+    rules: { doubleOn: '9-11' },
+    netProfit: 2000,
+    totalWagered: 6000,
+    outcome: Outcome.Win,
+  },
+  {
+    id: 'T2-R1',
+    situation:
+      're-split aces: A,A vs 6, first ace draws an ace and is split again; three hands win',
+    cards: [1, 6, 1, 10, 1, 9, 8, 10, 10],
+    rules: { resplitAces: true },
+    netProfit: 6000,
+    totalWagered: 6000,
+    outcome: Outcome.Win,
+  },
+  {
+    id: 'T2-R2',
+    situation: 'no re-split aces: the same cards leave A,A standing on soft 12',
+    cards: [1, 6, 1, 10, 1, 9, 8, 10, 10],
+    netProfit: 4000,
+    totalWagered: 4000,
+    outcome: Outcome.Win,
+    cardsUsed: 7,
+  },
+  {
+    id: 'T2-M1',
+    situation: 'two split hands at most: the second pair of 8s plays as hard 16 and stands',
+    cards: [8, 6, 8, 10, 8, 10, 10],
+    rules: { maxSplitHands: 2 },
+    netProfit: 4000,
+    totalWagered: 4000,
+    outcome: Outcome.Win,
+  },
 ];
 
 describe('playRound golden cases (spec 5.6, 7.10)', () => {
@@ -262,6 +356,27 @@ describe('playRound guards', () => {
     playRound(contextFor(), createStackedShoe([10, 10, 10, 10]), 2000, 2000, result);
     expect(result.netProfit).toBe(0);
   });
+});
+
+describe('small shoes (spec 8.3, pinned in 2.6)', () => {
+  it.each([1, 2] as const)(
+    '%i deck(s) at 90%% penetration play 20,000 rounds, reusing discards when the shoe runs out',
+    (decks) => {
+      const context = contextFor({ decks, penetrationPercent: 90, resplitAces: true });
+      const shoe = createShoe(decks, 90, new Rng(31));
+      const result = createRoundSettlement();
+      let discardReuses = 0;
+      for (let round = 0; round < 20_000; round += 1) {
+        playRound(context, shoe, 2000, 1_000_000, result);
+        if (shoe.mustReshuffle) discardReuses += 1;
+        expect(Number.isSafeInteger(result.netProfit)).toBe(true);
+      }
+      if (decks === 1) expect(discardReuses).toBeGreaterThan(0);
+      const counts = new Array<number>(11).fill(0);
+      for (const card of shoe.cards) counts[card] = (counts[card] ?? 0) + 1;
+      expect(counts.slice(1)).toEqual([4, 4, 4, 4, 4, 4, 4, 4, 4, 16].map((n) => n * decks));
+    },
+  );
 });
 
 describe('playRound with a real shoe', () => {

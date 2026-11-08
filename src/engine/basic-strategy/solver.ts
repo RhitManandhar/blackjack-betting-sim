@@ -1,6 +1,7 @@
 import type { RuleSet } from '../../shared/schema';
 import { ACE, TEN, bestTotal, cardsPerDeckOfValue } from '../blackjack/cards';
-import { assertTier1Rules, ruleSetKey } from '../blackjack/rules';
+import { assertSupportedRules, doubleAllowedOnTotal, ruleSetKey } from '../blackjack/rules';
+import { SURRENDER_EV } from './decision';
 import {
   DEALER_BUST_SLOT,
   DealerOutcomeEvaluator,
@@ -27,6 +28,9 @@ import {
 // - Split EV uses the standard resplit approximation (P4): the shoe minus the upcard and both
 //   pair cards, a fixed probability of drawing another pair card, and the expected number of
 //   finished hands and of hands left unsplit once the hand limit is reached.
+// - Spec 2.6: the cells store the raw EV of doubling; whether a double is legal (doubling
+//   restriction, double after split) is decided per hand at play time. The pair decision's
+//   "not splitting" value respects those rules and includes late surrender (EV −0.5) when on.
 //
 // Plain floating point is correct here: these are probabilities, never money.
 
@@ -181,8 +185,20 @@ function twoCardEvs(context: SolverContext, first: number, second: number): Acti
   return evs;
 }
 
+/** Best EV of playing the initial two-card pair unsplit, never surrendering. */
+function unsplitPairEvWithoutSurrender(rules: RuleSet, pairValue: number, evs: ActionEvs): number {
+  const total = bestTotal(2 * pairValue, pairValue === ACE);
+  const best = Math.max(evs.stand, evs.hit);
+  return doubleAllowedOnTotal(rules, total) ? Math.max(best, evs.double) : best;
+}
+
 /** Fills the stand, hit and double cells and the no-split pair EVs for one upcard. */
-function solveTotals(table: StrategyTable, context: SolverContext, upcard: number): void {
+function solveTotals(
+  table: StrategyTable,
+  context: SolverContext,
+  upcard: number,
+  rules: RuleSet,
+): void {
   const weights = new Float64Array(table.stand.length);
   const accumulate = (row: number, weight: number, evs: ActionEvs): void => {
     const index = cellIndex(row, upcard);
@@ -205,7 +221,12 @@ function solveTotals(table: StrategyTable, context: SolverContext, upcard: numbe
       const row = hasAce ? softRow(first + second + 10) : hardRow(first + second);
       accumulate(row, weight, evs);
       if (first === second) {
-        table.noSplit[pairCellIndex(first, upcard)] = Math.max(evs.stand, evs.hit, evs.double);
+        const index = pairCellIndex(first, upcard);
+        const withoutSurrender = unsplitPairEvWithoutSurrender(rules, first, evs);
+        table.noSplitWithoutSurrender[index] = withoutSurrender;
+        table.noSplit[index] = rules.lateSurrender
+          ? Math.max(withoutSurrender, SURRENDER_EV)
+          : withoutSurrender;
       }
     }
   }
@@ -238,12 +259,12 @@ export function expectedSplitHands(pairChance: number, splitsLeft: number): [num
   return solve(2, splitsLeft);
 }
 
-/** EV of one post-split hand after its second card; doubling only with DAS, aces get one card. */
+/** EV of one post-split hand after its second card; aces get one card, doubling needs DAS. */
 function postSplitHandEv(
   context: SolverContext,
   pairValue: number,
   second: number,
-  doubleAfterSplit: boolean,
+  rules: RuleSet,
 ): number {
   context.remove(second);
   const hardSum = pairValue + second;
@@ -253,7 +274,9 @@ function postSplitHandEv(
   let ev = stand;
   if (pairValue !== ACE) {
     ev = Math.max(stand, context.hitEv(hardSum, hasAce, handKey));
-    if (doubleAfterSplit) ev = Math.max(ev, context.doubleEv(hardSum, hasAce, handKey));
+    if (rules.doubleAfterSplit && doubleAllowedOnTotal(rules, bestTotal(hardSum, hasAce))) {
+      ev = Math.max(ev, context.doubleEv(hardSum, hasAce, handKey));
+    }
   }
   context.restore(second);
   return ev;
@@ -279,11 +302,9 @@ function solveSplit(
     const available = context.count(second);
     if (available === 0) continue;
     finishedEv +=
-      (available / nonPairRemaining) *
-      postSplitHandEv(context, pairValue, second, rules.doubleAfterSplit);
+      (available / nonPairRemaining) * postSplitHandEv(context, pairValue, second, rules);
   }
-  const unsplitEv =
-    pairCount > 0 ? postSplitHandEv(context, pairValue, pairValue, rules.doubleAfterSplit) : 0;
+  const unsplitEv = pairCount > 0 ? postSplitHandEv(context, pairValue, pairValue, rules) : 0;
 
   const splitsLeft = pairValue === ACE && !rules.resplitAces ? 0 : rules.maxSplitHands - 2;
   const [finishedHands, unsplitHands] = expectedSplitHands(
@@ -298,11 +319,11 @@ function solveSplit(
 }
 
 export function solveStrategyTable(rules: RuleSet): StrategyTable {
-  assertTier1Rules(rules);
+  assertSupportedRules(rules);
   const table = createEmptyTable(ruleSetKey(rules));
   for (let upcard = 1; upcard <= UPCARDS; upcard += 1) {
     const context = new SolverContext(rules.decks, upcard, rules.soft17 === 'H17');
-    solveTotals(table, context, upcard);
+    solveTotals(table, context, upcard, rules);
     for (let pairValue = 1; pairValue <= 10; pairValue += 1) {
       solveSplit(table, context, upcard, pairValue, rules);
     }
