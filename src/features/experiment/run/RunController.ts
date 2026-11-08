@@ -9,10 +9,17 @@ import {
   type ToWorkerMessage,
   fromWorkerMessageSchema,
 } from '../../../workers/messages';
-import { type ChunkRange, chunkSimulationCount, planChunks } from './runPlanning';
+import {
+  type ChunkRange,
+  type ChunkTiming,
+  NO_TIMING,
+  adaptiveChunkSize,
+  measuredRoundMicroseconds,
+} from './runPlanning';
 
 // Runs an experiment on a bounded pool of workers (plan section 9, spec 10.4).
-// - Chunks are queued in simulation order and handed to idle workers.
+// - Chunks are cut in simulation order as workers become free, each sized from the speed
+//   measured so far in the run (Phase 9). Sizes never change results (spec 8.4).
 // - Results are merged into ExperimentResults, which rejects duplicates, so a retried chunk can
 //   never be counted twice. A chunk is applied whole or not at all.
 // - The screen gets a snapshot at most every SNAPSHOT_INTERVAL_MS, never per round.
@@ -66,6 +73,8 @@ export interface RunSnapshot {
    */
   readonly results: ExperimentResults;
   readonly error: string | null;
+  /** Worker time per round measured in this run, for future runtime estimates; null until known. */
+  readonly measuredRoundMicroseconds: number | null;
 }
 
 interface Slot {
@@ -79,8 +88,9 @@ interface Slot {
 interface RunState {
   readonly runId: string;
   readonly config: ExperimentConfig;
-  readonly chunks: readonly ChunkRange[];
-  readonly queue: ChunkRange[];
+  /** Every chunk handed out so far, by id. A retried chunk keeps its exact range. */
+  readonly chunks: Map<number, ChunkRange>;
+  readonly retries: ChunkRange[];
   readonly attempts: Map<number, number>;
   readonly results: ExperimentResults;
   readonly profit: IntegerMoments[];
@@ -88,7 +98,9 @@ interface RunState {
   readonly displayed: (readonly StrategySimulationResult[] | null)[];
   readonly startedAt: number;
   status: RunStatus;
-  chunksDone: number;
+  nextSimulation: number;
+  nextChunkId: number;
+  timing: ChunkTiming;
   roundsPlayed: number;
   endedAt: number | null;
   summary: ExperimentSummary | null;
@@ -99,7 +111,7 @@ export interface RunControllerOptions {
   readonly createWorker: WorkerFactory;
   readonly onSnapshot: (snapshot: RunSnapshot) => void;
   readonly now?: () => number;
-  /** Override for tests; defaults to the configuration's own chunk sizing. */
+  /** Fixed chunk size, for tests; by default chunks are sized from measured speed. */
   readonly chunkSize?: (config: ExperimentConfig) => number;
 }
 
@@ -123,13 +135,11 @@ export class RunController {
     this.resizePool(workerCount);
     this.runCounter += 1;
     const runId = `run-${String(this.runCounter)}`;
-    const chunkSize = (this.options.chunkSize ?? chunkSimulationCount)(config);
-    const chunks = planChunks(config.simulations, chunkSize);
     this.run = {
       runId,
       config,
-      chunks,
-      queue: [...chunks],
+      chunks: new Map(),
+      retries: [],
       attempts: new Map(),
       results: new ExperimentResults(config),
       profit: config.strategies.map(() => new IntegerMoments()),
@@ -139,7 +149,9 @@ export class RunController {
       ),
       startedAt: this.now(),
       status: 'running',
-      chunksDone: 0,
+      nextSimulation: 0,
+      nextChunkId: 0,
+      timing: NO_TIMING,
       roundsPlayed: 0,
       endedAt: null,
       summary: null,
@@ -154,7 +166,7 @@ export class RunController {
   stop(): void {
     const run = this.run;
     if (run?.status !== 'running') return;
-    run.queue.length = 0;
+    run.retries.length = 0;
     for (const slot of this.slots) {
       if (slot.chunk !== null) slot.worker.send({ type: 'cancel', runId: run.runId });
     }
@@ -213,8 +225,8 @@ export class RunController {
     if (run?.status !== 'running') return;
     for (const slot of this.slots) {
       if (slot.chunk !== null) continue;
-      const chunk = run.queue.shift();
-      if (chunk === undefined) return;
+      const chunk = run.retries.shift() ?? this.nextChunk(run);
+      if (chunk === null) return;
       slot.chunk = chunk;
       slot.runId = run.runId;
       slot.progressRounds = 0;
@@ -227,6 +239,30 @@ export class RunController {
         simulationCount: chunk.simulationCount,
       });
     }
+  }
+
+  /** Cuts the next range of simulations, in order, or null when every one has been handed out. */
+  private nextChunk(run: RunState): ChunkRange | null {
+    const remaining = run.config.simulations - run.nextSimulation;
+    if (remaining <= 0) return null;
+    const fixed = this.options.chunkSize?.(run.config);
+    // Never more than an even share of what is left, so every worker gets work, even in small
+    // runs and at the end of a run.
+    const size =
+      fixed ??
+      Math.min(
+        adaptiveChunkSize(run.config, run.timing),
+        Math.ceil(remaining / Math.max(1, this.slots.length)),
+      );
+    const chunk: ChunkRange = {
+      chunkId: run.nextChunkId,
+      firstSimulation: run.nextSimulation,
+      simulationCount: Math.min(Math.max(1, size), remaining),
+    };
+    run.chunks.set(chunk.chunkId, chunk);
+    run.nextChunkId += 1;
+    run.nextSimulation += chunk.simulationCount;
+    return chunk;
   }
 
   private handleMessage(slot: Slot, data: unknown): void {
@@ -264,7 +300,7 @@ export class RunController {
   }
 
   private applyChunk(run: RunState, message: ChunkResultMessage): void {
-    const chunk = run.chunks[message.chunkId];
+    const chunk = run.chunks.get(message.chunkId);
     if (chunk?.simulationCount !== message.simulations.length) {
       this.failRun(
         run,
@@ -298,9 +334,13 @@ export class RunController {
       if (id >= 0 && id < run.displayed.length) run.displayed[id] = results;
     }
     run.roundsPlayed += message.roundsPlayed;
-    run.chunksDone += 1;
+    run.timing = {
+      simulations: run.timing.simulations + chunk.simulationCount,
+      rounds: run.timing.rounds + message.roundsPlayed,
+      computeMs: run.timing.computeMs + message.computeMs,
+    };
 
-    if (run.chunksDone === run.chunks.length) {
+    if (run.results.completed === run.config.simulations) {
       this.finish(run, 'complete', null);
       return;
     }
@@ -330,12 +370,12 @@ export class RunController {
       );
       return;
     }
-    run.queue.unshift(chunk);
+    run.retries.unshift(chunk);
     this.dispatch();
   }
 
   private failRun(run: RunState, error: string): void {
-    run.queue.length = 0;
+    run.retries.length = 0;
     this.slots.forEach((slot, index) => {
       if (slot.chunk !== null) {
         slot.chunk = null;
@@ -398,6 +438,7 @@ export class RunController {
       summary: run.summary,
       results: run.results,
       error: run.error,
+      measuredRoundMicroseconds: measuredRoundMicroseconds(run.timing),
     });
   }
 }

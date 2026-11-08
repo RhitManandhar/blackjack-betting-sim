@@ -46,6 +46,7 @@ export function createWorkerMessageHandler(
         chunkId,
         simulations: outcome.simulations,
         roundsPlayed: outcome.roundsPlayed,
+        computeMs: outcome.computeMs,
       });
     } catch (error) {
       send({ type: 'error', runId, chunkId, message: describe(error) });

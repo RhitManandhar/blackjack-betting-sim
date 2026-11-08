@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Spec version | **2.8** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026; 2.4 Phase 5 pins 8 November 2026; 2.5 failed run status 8 November 2026; 2.6 rules Tiers 2–3 8 November 2026; 2.7 rankings and bet progression 8 November 2026; 2.8 export formats 8 November 2026) |
+| Spec version | **2.9** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026; 2.4 Phase 5 pins 8 November 2026; 2.5 failed run status 8 November 2026; 2.6 rules Tiers 2–3 8 November 2026; 2.7 rankings and bet progression 8 November 2026; 2.8 export formats 8 November 2026; 2.9 Phase 9 limits 8 November 2026) |
 | Results schema version | 1 |
 | Based on | [Project Plan v2](project-plan-v2.md) |
 | Status | **Frozen** 7 November 2026. Decisions D1–D19 and assumptions A1–A4 confirmed by the project owner. Changes need a version bump and a changelog entry (section 13). |
@@ -560,10 +560,10 @@ The same configuration and experiment seed always give identical per-simulation 
 ```ts
 interface ExperimentConfig {
   schemaVersion: 1;
-  specVersion: "2.8";
+  specVersion: "2.9";
   experimentId: string;              // created in the UI
   experimentSeed: number;            // uint32
-  simulations: number;                  // 1 .. 50_000 (soft cap, final value from Phase 9)
+  simulations: number;                  // 1 .. 50_000 (final cap, confirmed by the Phase 9 benchmark, 2.9)
   roundLimit: number;                // 1 .. 10_000
   currency: "AUD";                   // display only
   startingBankroll: Cents;           // > 0
@@ -585,7 +585,10 @@ Rules:
 
 - Validate with Zod at every boundary: form input, imported JSON and worker messages.
 - Checkpoints above the round limit are removed, and the UI says so.
-- Total work = `simulations × strategies × roundLimit` (an upper bound). Over about 100 million rounds triggers a warning before the run.
+- Total work = `simulations × strategies × roundLimit` (an upper bound). Over 100 million rounds triggers a warning before the run; the run is still allowed.
+- **Final limits (2.9).** The Phase 9 benchmark (`docs/performance.md`) confirmed the initial values: at most 50,000 simulations, at most 10,000 rounds per simulation, a 100-million-round warning threshold and at most 4 workers. Results for every completed simulation stay in memory, about `101 + 8 × checkpoints` bytes per simulation per strategy, so at most about 65 MB at the caps with 20 checkpoints. The limits have not yet been checked on a low-power device.
+- **Chunk sizing (2.9).** Chunks are cut in simulation order as workers become free. Each is sized for about 150 ms of work at the speed measured so far in the run (worker time excluding strategy-table preparation), starts from a cautious worst-case size, and is never more than an even share of the simulations still to hand out. A retried chunk keeps its exact range. Because a simulation's result depends only on its index (8.1, 8.4), chunk sizes never change results.
+- **Runtime estimate (2.9).** The pre-run estimate is an upper bound (every strategy plays to the round limit). It uses the worker time per round measured by the last sufficiently large run on this device, kept in browser storage, or a cautious default of 1.25 µs per round.
 - Changing `workerCount` never changes results (8.4). It is stored only to describe the run.
 - `displayedSimulations` affects only what is drawn, never results. If it is larger than `simulations`, it is lowered to `simulations` and the UI says so.
 - Money inputs are typed in currency units and converted to cents once, at the form boundary.
@@ -733,7 +736,7 @@ Rows are ordered by `simulation_id`, then by strategy in configuration order. Ev
 
 The grid lets the user see, for individual simulations, how every chosen strategy fared on the same cards.
 
-- **Which simulations:** simulations `0 … n−1`, where `n = displayedSimulations`, labelled "Simulation 1 … n" with their simulation seed. Fixed indices keep the choice deterministic and independent of worker count. Chunks are queued in simulation order, so these simulations are among the first to finish.
+- **Which simulations:** simulations `0 … n−1`, where `n = displayedSimulations`, labelled "Simulation 1 … n" with their simulation seed. Fixed indices keep the choice deterministic and independent of worker count. Chunks are cut in simulation order (section 9), so these simulations are among the first to finish.
 - **One panel per simulation:** each panel overlays one bankroll line per chosen strategy on a shared round axis, starting at round 0 (the starting bankroll). It shows reference lines for the starting bankroll and the active target, and a legend with strategy toggles.
 - **Downsampling:** for displayed simulations only, the worker records each strategy's bankroll at round 0, at every `k`-th round where `k = max(1, ceil(roundLimit / 200))`, and at that strategy's final round. Each point holds the round, the bankroll after it, and the initial bet placed in that round (0 at round 0), for the panel tooltip (pinned in 2.4). That is at most about 202 points per strategy per panel. Non-displayed simulations record no curve data.
 - **Delivery:** curve points travel in the **chunk result** message for the chunk that contains the simulation, never in progress messages and never per round. A panel fills in when that chunk result arrives. The run is never slowed or paced for display. Panels not yet filled show "running".
@@ -810,3 +813,4 @@ These close gaps the plan left open. All are confirmed by the project owner (7 N
 | 2.6 | 2026-11-08 | Rules Tiers 2 and 3, agreed with the project owner and passed by both gates (`docs/validation.md`). **Rules (5.1, 5.3):** 1, 2 and 4 decks; late surrender (initial hand only, after the peek, loses `b − floor(b/2)`, never blocked by funds); doubling on 9–11 or 10–11 means the hand's total, so no soft doubles; at most 2 or 3 split hands; re-split aces; penetration 50–90% in steps of 5. **Solver (6.1):** legality is decided per hand, surrender is part of the pair decision. **Shoe (8.3):** a shoe that runs out mid-round reuses its discards, then reshuffles before the next round. **Gates (6.3):** scope, pair rows and two agreed chart exceptions. Tier 1 results are unchanged: a Tier 1 shoe never runs out mid-round. |
 | 2.7 | 2026-11-08 | Phase 8 dashboard decisions, agreed with the project owner. **Rankings by goal (10.10):** metric, interval and verdict rules for the five goals. **Bet progression (10.1, 10.2):** new `checkpointBet` field (bet in each checkpoint round, `null` once stopped) with exact mean and 95th percentile among strategies still playing; at most 20 checkpoints (section 9) to bound memory. **Summary additions (10.2, 10.3):** share at or above break-even with its Wilson interval, exact drawdown percentiles, checkpoint mean interval, and 25th/75th checkpoint percentiles. No change to any simulated result. |
 | 2.8 | 2026-11-08 | Phase 8 export decisions, agreed with the project owner. **CSV conventions (10.5):** statistics are rounded to whole cents with halves away from zero, on screen and in the reports alike; non-money averages have two decimals; CRLF line endings, no byte-order mark, RFC 4180 quoting. **CSV 2 (10.7):** new `run_status` column after `experiment_id`, as 10.5 already required. **HTML report (10.8):** contents and the offline rule. No change to any simulated result. |
+| 2.9 | 2026-11-08 | Phase 9 decisions, agreed with the project owner. **Limits (section 9):** the initial caps are confirmed as final from the benchmark (`docs/performance.md`), with a memory bound; not yet checked on a low-power device. **Chunk sizing (section 9, 10.9):** chunks are sized from measured speed and capped at an even share of what is left. **Runtime estimate (section 9):** uses the speed measured on this device when known. No change to any simulated result. |

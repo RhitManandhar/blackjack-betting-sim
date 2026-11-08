@@ -45,6 +45,15 @@ export function browserProbe(): Probe {
   };
 }
 
+/** Runs a full garbage collection if the browser exposes gc(); returns whether it did. */
+export function collectGarbage(): boolean {
+  const gc = (globalThis as { gc?: () => void }).gc;
+  if (gc === undefined) return false;
+  gc();
+  gc();
+  return true;
+}
+
 export function currentHeapMb(): number | null {
   const bytes = heapBytes();
   return bytes === null ? null : bytes / MB;

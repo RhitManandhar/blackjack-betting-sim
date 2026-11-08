@@ -8,7 +8,7 @@ import {
   benchmarkMarkdown,
   runCase,
 } from './benchmark';
-import { browserEnvironment, browserProbe, currentHeapMb } from './browserProbe';
+import { browserEnvironment, browserProbe, collectGarbage, currentHeapMb } from './browserProbe';
 
 // In-browser performance check (plan Phase 9, tasks 1, 2 and 6), opened with /?benchmark. It
 // runs the default configuration through the real worker pool for each simulation count and
@@ -69,6 +69,7 @@ export function BenchmarkPage() {
     setBusy(true);
     setMemory(null);
     const steps: string[] = [];
+    let forcedGc = false;
     try {
       for (let run = 0; run < 6; run += 1) {
         const cancel = run === 2;
@@ -80,13 +81,15 @@ export function BenchmarkPage() {
           cancel ? { ...options(), cancelAfterMs: 1_500 } : options(),
         );
         await new Promise((resolve) => setTimeout(resolve, 1_000));
+        // Chrome started with --js-flags=--expose-gc offers gc(); then readings are comparable.
+        forcedGc = collectGarbage() || forcedGc;
         const heap = currentHeapMb();
         steps.push(
           `run ${String(run + 1)}${cancel ? ' (cancelled)' : ''}: ${heap === null ? 'not reported' : `${heap.toFixed(1)} MB`}`,
         );
       }
       setMemory(
-        `Heap after each of 6 runs (5,000 simulations × 4 workers, no forced GC): ${steps.join('; ')}`,
+        `Heap after each of 6 runs (5,000 simulations × 4 workers, ${forcedGc ? 'forced GC' : 'no forced GC'}): ${steps.join('; ')}`,
       );
       setStatus('Memory check finished.');
     } catch (error) {

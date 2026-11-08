@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { experimentConfigSchema } from '../../shared/schema';
 import { createWorkerMessageHandler } from '../../workers/workerMessageHandler';
 import type { WorkerFactory } from '../experiment/run/RunController';
 import {
@@ -59,6 +60,7 @@ describe('benchmark driver (plan Phase 9)', () => {
     expect(config.simulations).toBe(500);
     expect(config.strategies).toHaveLength(5);
     expect(config.roundLimit).toBe(1_000);
+    expect(experimentConfigSchema.safeParse(benchmarkConfig(1)).success).toBe(true);
   });
 
   it('crosses every simulation count with 1 to 4 workers', () => {
@@ -77,6 +79,7 @@ describe('benchmark driver (plan Phase 9)', () => {
       { factory: inProcessFactory, now, probe: countingProbe().probe },
     );
     expect(first.status).toBe('complete');
+    expect(first.coldStartMs).toBeGreaterThan(0);
     expect(first.roundsPlayed).toBeGreaterThan(0);
     expect(first.roundsPerSecond).toBeGreaterThan(0);
     expect(first.messagesPerSecond).toBeGreaterThan(0);
@@ -105,6 +108,7 @@ describe('benchmark driver (plan Phase 9)', () => {
       simulations: 500,
       workers,
       status: 'complete',
+      coldStartMs: 1_400,
       elapsedMs: 2_000,
       roundsPlayed: 1_000_000,
       roundsPerSecond,
@@ -119,7 +123,7 @@ describe('benchmark driver (plan Phase 9)', () => {
       row(3, 1_400_000, 'xyz'),
     ]);
     expect(markdown).toContain(
-      '| 500 | 2 | complete | 2.0 | 1,000,000 | 1,000,000 | 2.0× | 7.3 | — | 40 | abc',
+      '| 500 | 2 | complete | 1.4 | 2.0 | 1,000,000 | 1,000,000 | 2.0× | 7.3 | — | 40 | abc',
     );
     expect(markdown).toContain('xyz (differs!)');
   });
