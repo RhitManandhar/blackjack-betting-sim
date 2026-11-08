@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026) |
+| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026; 2.4 Phase 5 pins 8 November 2026) |
 | Results schema version | 1 |
 | Based on | [Project Plan v2](project-plan-v2.md) |
 | Status | **Frozen** 7 November 2026. Decisions D1–D19 and assumptions A1–A4 confirmed by the project owner. Changes need a version bump and a changelog entry (section 13). |
@@ -555,7 +555,7 @@ The same configuration and experiment seed always give identical per-simulation 
 ```ts
 interface ExperimentConfig {
   schemaVersion: 1;
-  specVersion: "2.3";
+  specVersion: "2.4";
   experimentId: string;              // created in the UI
   experimentSeed: number;            // uint32
   simulations: number;                  // 1 .. 50_000 (soft cap, final value from Phase 9)
@@ -646,7 +646,17 @@ Statistics may be fractional and are rounded to cents only for display. Money to
 
 ### 10.3 Checkpoint aggregates
 
-Per checkpoint and strategy: count, exact integer sum of profit, sum of squares, count profitable, minimum (worst loss), and a fixed-bin histogram. Checkpoint percentiles (5th–95th) come from the histogram and are labelled approximate. The bin layout depends only on the configuration, never on the data, so every worker uses the same bins. It has fixed-width bins plus underflow and overflow bins. Phase 5 picks the exact range and bin count and records the reason here, with a spec version bump.
+Per checkpoint and strategy: count, exact integer sum of profit, sum of squares, count profitable, minimum (worst loss), and a fixed-bin histogram. Checkpoint percentiles (5th–95th) come from the histogram and are labelled approximate. The bin layout depends only on the configuration, never on the data, so every worker uses the same bins. It has fixed-width bins plus underflow and overflow bins.
+
+**Layout (pinned in 2.4).** With starting bankroll `B`, there are 400 equal bins covering profit from `−B` to `+3B`, each `[low, high)` and 1% of `B` wide (5.00 at the default 500.00). One underflow bin sits below `−B` and one overflow bin at `+3B` or above. A profit `x` in range goes to bin `floor((x + B) × 400 / 4B)`, computed in integers. An approximate percentile uses type-7 ranks, with the k-th smallest value placed at the midpoint of its share of its bin. Values in the underflow or overflow bin report the range edge.
+
+Reasons:
+
+- `−B` is a hard floor. Every stake must be funded (5.4), so a strategy can never lose more than its bankroll.
+- `+3B` covers every target with room to spare, since the highest target is `+2.5B`.
+- With 1% bins, checkpoint percentiles are accurate to about ±1% of the bankroll.
+- Memory is about 3 KB per checkpoint per strategy.
+- Only no-target runs that go beyond `+3B` reach the overflow bin. They affect the 5th–95th percentiles only if more than 5% of simulations get there.
 
 ### 10.4 Run status
 
@@ -705,7 +715,7 @@ The grid lets the user see, for individual simulations, how every chosen strateg
 
 - **Which simulations:** simulations `0 … n−1`, where `n = displayedSimulations`, labelled "Simulation 1 … n" with their simulation seed. Fixed indices keep the choice deterministic and independent of worker count. Chunks are queued in simulation order, so these simulations are among the first to finish.
 - **One panel per simulation:** each panel overlays one bankroll line per chosen strategy on a shared round axis, starting at round 0 (the starting bankroll). It shows reference lines for the starting bankroll and the active target, and a legend with strategy toggles.
-- **Downsampling:** for displayed simulations only, the worker records each strategy's bankroll at round 0, at every `k`-th round where `k = max(1, ceil(roundLimit / 200))`, and at that strategy's final round. That is at most about 202 points per strategy per panel. Non-displayed simulations record no curve data.
+- **Downsampling:** for displayed simulations only, the worker records each strategy's bankroll at round 0, at every `k`-th round where `k = max(1, ceil(roundLimit / 200))`, and at that strategy's final round. Each point holds the round, the bankroll after it, and the initial bet placed in that round (0 at round 0), for the panel tooltip (pinned in 2.4). That is at most about 202 points per strategy per panel. Non-displayed simulations record no curve data.
 - **Delivery:** curve points travel in the **chunk result** message for the chunk that contains the simulation, never in progress messages and never per round. A panel fills in when that chunk result arrives. The run is never slowed or paced for display. Panels not yet filled show "running".
 - **Stopped strategies:** a strategy's line ends at its final round with a marker showing its stop reason (`target_reached`, `bust`, `blocked_table_max`, `round_limit`). It is not carried forward in the panel. Checkpoint charts still carry frozen profit forward (10.1).
 - **Cancelled runs:** panels whose simulation did not finish show "not finished (run cancelled)". They are never drawn from partial data.
@@ -755,3 +765,4 @@ These close gaps the plan left open. All are confirmed by the project owner (7 N
 | 2.1 | 2026-11-08 | Terminology only, no behaviour change: "session" renamed to "simulation" everywhere, including identifiers and CSV columns (`simulations`, `displayedSimulations`, `simulationSeed`, `StrategySimulationResult`, `simulation_id`, `simulation_seed`). Results schema stays at version 1 because nothing had been exported yet. |
 | 2.2 | 2026-11-08 | Phase 3 pins, agreed with the project owner (plan items P1–P6). **Generator and shoe:** splitmix32 constants, the unbiased bounded-integer method, test vectors, the fixed shoe order and in-place reshuffles (8.2, 8.3). **Basic strategy:** the solver method — exact card removal, peek-conditioned dealer, two-card-weighted total cells, the split approximation and run-time caching (6.1). **Play:** split dealing order (5.2) and how funds-short decisions are counted (5.4). Results produced before 2.2 are not comparable, because none existed. |
 | 2.3 | 2026-11-08 | Wording only, no change in behaviour. Corrected the note under Oscar's Grind (4.3): the cycle-goal cap holds after a loss or push except when the bet was forced up to the table minimum, which can stay above `needed` through pushes. The overshoot is recorded once, when it is set. Found by the Phase 4 property tests. |
+| 2.4 | 2026-11-08 | Phase 5 pins, agreed with the project owner. **Checkpoint histogram layout (10.3):** 400 equal bins from −B to +3B, plus underflow and overflow bins, the bin formula and the approximate-percentile rule. **Curve points (10.9):** each point also records that round's initial bet, for the tooltip. No change to any simulated result. |

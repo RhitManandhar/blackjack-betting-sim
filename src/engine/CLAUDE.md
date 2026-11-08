@@ -23,6 +23,13 @@ Loaded by Claude Code when working in this folder. The root `CLAUDE.md` rules st
 - `betting/__tests__/replay.ts` is a test-only harness for the spec 7.1 outcome codes. The real runner is Phase 5.
 - Paroli classic and Paroli 1-3-2-6 must never share code or state.
 
+## Simulation runner and statistics
+
+- `simulation/runSimulation.ts` follows spec 2.2 exactly. Before each round it checks the bet. After each round it records first crossings, then checks the target, then the round limit. Strategies run one after another within a simulation; they never interact.
+- `RoundSourceFactory` is the seam for tests. `blackjackRoundSources` plays real rounds, and `simulation/__tests__/scripted.ts` replays spec 7.1 outcome codes.
+- `statistics/ExperimentResults` stores one row per simulation per strategy in typed arrays indexed by simulation id. It throws on a duplicate, so a re-queued chunk can never double count. Summaries are computed from the whole table in id order with exact integer and BigInt sums. Never compute a statistic from arrival order.
+- Checkpoint histograms use the fixed layout pinned in spec 10.3 (2.4), which depends only on the starting bankroll.
+
 ## Hot path (`playRound`)
 
 - No allocation per round. Per-hand state lives in typed arrays on `RoundContext`, and results are written into a caller-owned `RoundSettlement`. Do not return new objects, spread or destructure inside the round loop.

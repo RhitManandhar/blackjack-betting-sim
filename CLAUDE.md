@@ -2,7 +2,7 @@
 
 Claude Code loads this file automatically from the repository root. It holds the standing rules for every session.
 
-- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.3), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
+- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.4), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
 - **Roadmap, UX and hosting:** `docs/project-plan-v2.md`.
 - The spec is long, so it is not imported here. Read the sections relevant to the task before writing engine, strategy or statistics code.
 
@@ -11,7 +11,8 @@ Claude Code loads this file automatically from the repository root. It holds the
 - Phase 1 (specification freeze): **done** 2026-11-07. `docs/spec.md` v2.0 frozen; D1–D19 and A1–A4 confirmed. v2.1 (2026-11-08) renamed "session" to "simulation" (terminology only).
 - Phase 2 (foundation): **done** 2026-11-08. Merged to `main` (PR #1), CI green, live on Cloudflare Pages over HTTPS.
 - Phase 3 (blackjack engine, rules Tier 1): **done** 2026-11-08 on branch `phase-3-engine` (spec v2.2, pins P1–P6). Chart gate and house-edge gate pass for all 16 Tier 1 rule sets; see `docs/validation.md`. Merged to `main` (PR #2); deploys use `wrangler.jsonc` (static assets, `previews` block for branch previews).
-- Phase 4 (betting strategies): **done** 2026-11-08 on branch `phase-4-strategies` (spec v2.3 corrects an Oscar's Grind note); not yet merged. Exit criteria met: worked examples 7.2–7.8, stop cases X1–X5 and property tests pass. Deferred to Phase 5: max drawdown (7.7) and stop cases X6–X9, which need the runner. The `playRound` output was renamed `RoundSettlement` so `RoundResult` means win/loss/push, as in spec 4.1.
+- Phase 4 (betting strategies): **done** 2026-11-08, merged to `main` (PR #3). Spec v2.3 corrected an Oscar's Grind note.
+- Phase 5 (simulation runner and statistics): **done** 2026-11-08 on branch `phase-5-runner`; not yet merged. Runner throughput is about 1.23 µs per round with bookkeeping. Spec v2.4 pins the checkpoint histogram layout (400 bins, −B to +3B) and the curve-point bet field.
 - Known: `npm audit` reports a moderate `minimatch` advisory inside ESLint tooling only (dev dependency; `npm audit --omit=dev` is clean). The only fix downgrades ESLint 10 to 9, so it is deliberately left. Recheck when ESLint updates.
 
 Update this section at the end of each phase.
