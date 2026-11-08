@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026; 2.4 Phase 5 pins 8 November 2026) |
+| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026; 2.4 Phase 5 pins 8 November 2026; 2.5 failed run status 8 November 2026) |
 | Results schema version | 1 |
 | Based on | [Project Plan v2](project-plan-v2.md) |
 | Status | **Frozen** 7 November 2026. Decisions D1–D19 and assumptions A1–A4 confirmed by the project owner. Changes need a version bump and a changelog entry (section 13). |
@@ -555,7 +555,7 @@ The same configuration and experiment seed always give identical per-simulation 
 ```ts
 interface ExperimentConfig {
   schemaVersion: 1;
-  specVersion: "2.4";
+  specVersion: "2.5";
   experimentId: string;              // created in the UI
   experimentSeed: number;            // uint32
   simulations: number;                  // 1 .. 50_000 (soft cap, final value from Phase 9)
@@ -661,7 +661,8 @@ Reasons:
 ### 10.4 Run status
 
 - `complete`: every simulation finished.
-- `cancelled`: the user pressed Stop All. Results cover only fully finished simulations, the count of finished simulations is shown, and everything is labelled **partial**. A partly played simulation is thrown away, never counted.
+- `cancelled`: the user pressed Stop All. Results cover only fully finished simulations, the count of finished simulations is shown, and everything is labelled **partial**. A partly played simulation is thrown away, never counted. Simulations are counted in whole chunks only: a chunk still running when Stop All is pressed is discarded entirely, including any of its simulations that had already finished (added in 2.5).
+- `failed` (added in 2.5): a chunk failed on three attempts in a row (the first attempt plus two retries, each on a freshly started worker). The run stops and the error is shown. As with `cancelled`, results cover only whole finished chunks and are labelled **partial**. A retried chunk can never be counted twice, because each simulation is stored once by its id.
 
 ### 10.5 CSV conventions
 
@@ -766,3 +767,4 @@ These close gaps the plan left open. All are confirmed by the project owner (7 N
 | 2.2 | 2026-11-08 | Phase 3 pins, agreed with the project owner (plan items P1–P6). **Generator and shoe:** splitmix32 constants, the unbiased bounded-integer method, test vectors, the fixed shoe order and in-place reshuffles (8.2, 8.3). **Basic strategy:** the solver method — exact card removal, peek-conditioned dealer, two-card-weighted total cells, the split approximation and run-time caching (6.1). **Play:** split dealing order (5.2) and how funds-short decisions are counted (5.4). Results produced before 2.2 are not comparable, because none existed. |
 | 2.3 | 2026-11-08 | Wording only, no change in behaviour. Corrected the note under Oscar's Grind (4.3): the cycle-goal cap holds after a loss or push except when the bet was forced up to the table minimum, which can stay above `needed` through pushes. The overshoot is recorded once, when it is set. Found by the Phase 4 property tests. |
 | 2.4 | 2026-11-08 | Phase 5 pins, agreed with the project owner. **Checkpoint histogram layout (10.3):** 400 equal bins from −B to +3B, plus underflow and overflow bins, the bin formula and the approximate-percentile rule. **Curve points (10.9):** each point also records that round's initial bet, for the tooltip. No change to any simulated result. |
+| 2.5 | 2026-11-08 | Phase 6 decisions, agreed with the project owner. **Run status (10.4):** new `failed` status after a chunk fails three times, with partial results kept. Stop All discards chunks still running, including simulations in them that had already finished, so only whole chunks are counted. No change to any simulated result. |
