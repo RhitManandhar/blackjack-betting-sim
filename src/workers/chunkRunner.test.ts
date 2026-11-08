@@ -79,6 +79,20 @@ describe('ChunkRunner', () => {
       ),
     ).toThrow(RangeError);
   });
+
+  it('reports simulation time without the one-off table preparation', () => {
+    let clock = 1000;
+    const outcome = new ChunkRunner().run(
+      'run-timing',
+      config,
+      0,
+      3,
+      () => undefined,
+      () => (clock += 10),
+    );
+    // Reads: start (1010), progress timer (1020), one per simulation (to 1050), end (1060).
+    expect(outcome.computeMs).toBe(50);
+  });
 });
 
 describe('worker message contract', () => {
@@ -97,6 +111,7 @@ describe('worker message contract', () => {
       chunkId: 0,
       simulations: outcome.simulations,
       roundsPlayed: outcome.roundsPlayed,
+      computeMs: outcome.computeMs,
     };
     expect(fromWorkerMessageSchema.parse(structuredClone(message))).toEqual(message);
     expect(

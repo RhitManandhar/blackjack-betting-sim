@@ -2,7 +2,7 @@
 
 Claude Code loads this file automatically from the repository root. It holds the standing rules for every session.
 
-- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.8), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
+- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.9), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
 - **Roadmap, UX and hosting:** `docs/project-plan-v2.md`.
 - The spec is long, so it is not imported here. Read the sections relevant to the task before writing engine, strategy or statistics code.
 
@@ -15,7 +15,8 @@ Claude Code loads this file automatically from the repository root. It holds the
 - Phase 5 (simulation runner and statistics): **done** 2026-11-08, merged to `main` (PR #4). Spec v2.4 pins the checkpoint histogram layout and the curve-point bet field. Runner throughput is about 1.23 µs per round.
 - Phase 6 (worker pool and end-to-end slice): **done** 2026-11-08, merged to `main` (PR #5) and live. Spec v2.5 adds the `failed` run status. Only simulation 1's panel is drawn; the n-panel grid is deferred to Phase 8. Run always starts a fresh experiment.
 - Phase 7 (rules Tier 2 and Tier 3): **done** 2026-11-08, merged to `main` (PR #6). Spec v2.6. Both gates pass for every option; two pinned chart exceptions (`docs/validation.md`).
-- Phase 8 (dashboards and reports): **done** 2026-11-08 in three slices: 8a setup screen (PR #7), 8b live screen and dashboard (PR #8; spec v2.7; checkpoints capped at 20, user-approved), 8c exports (branch `phase-8c-exports`, not yet merged; spec v2.8). Goal rankings (spec 10.10); bet progression from per-checkpoint bets; last 10 experiment summaries in browser storage. Exports live in `src/features/results/export/`: CSV 1 and 2 (columns tested against the spec text), and a standalone HTML report with ECharts inlined (loaded only on demand). Screen and exports share one rounding rule (halves away from zero) and one text module (`resultsText.ts`).
+- Phase 8 (dashboards and reports): **done** 2026-11-08 in three slices: 8a setup screen (PR #7), 8b live screen and dashboard (PR #8; spec v2.7; checkpoints capped at 20, user-approved), 8c exports (PR #9; spec v2.8). Goal rankings (spec 10.10); bet progression from per-checkpoint bets; last 10 experiment summaries in browser storage. Exports live in `src/features/results/export/`: CSV 1 and 2 (columns tested against the spec text), and a standalone HTML report with ECharts inlined (loaded only on demand). Screen and exports share one rounding rule (halves away from zero) and one text module (`resultsText.ts`).
+- Phase 9 (performance, correctness, usability): **in progress** on branch `phase-9-performance`. 9a benchmark tools (`npm run bench:perf`, `/?benchmark`) and 9b calibration done (spec v2.9: limits confirmed final, chunks sized from measured `computeMs`, runtime estimate from the speed measured on this device). Results in `docs/performance.md`. No low-power device was available: that exit criterion is open, by the user's decision. Next: 9c cross-checks, 9d accessibility.
 - Known: `npm audit` reports a moderate `minimatch` advisory inside ESLint tooling only (dev dependency; `npm audit --omit=dev` is clean). The only fix downgrades ESLint 10 to 9, so it is deliberately left. Recheck when ESLint updates.
 
 Update this section at the end of each phase.
@@ -60,7 +61,7 @@ A personal, browser-only Monte Carlo simulator. The user picks table rules, bank
 
 ## Commands (keep these scripts working)
 
-`npm run dev`, `npm run build`, `npm run preview`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run format` / `npm run format:check`, and `npm run bench:houseedge` (the house-edge gate in `scripts/house-edge/`, run through `vitest.houseedge.config.ts`; about 7 minutes for all 38 rule sets; `-- t2` for Tiers 2–3 only; not part of CI; `HOUSE_EDGE_ROUNDS` overrides the 50M rounds per rule set). `npm test` includes the chart gate for 60 rule sets (about 17 s, in parallel files). A change is not done until lint, typecheck and tests pass. CI also runs `format:check` and `build`. Node 24 (`.nvmrc`).
+`npm run dev`, `npm run build`, `npm run preview`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run format` / `npm run format:check`, and `npm run bench:houseedge` (the house-edge gate in `scripts/house-edge/`, run through `vitest.houseedge.config.ts`; about 7 minutes for all 38 rule sets; `-- t2` for Tiers 2–3 only; not part of CI; `HOUSE_EDGE_ROUNDS` overrides the 50M rounds per rule set). `npm run bench:perf` is the Phase 9 performance benchmark (`scripts/perf/`, about 15–20 minutes; `bench:perf:quick` for a short grid; never in CI); the in-browser version is `/?benchmark`. Results go in `docs/performance.md`. `npm test` includes the chart gate for 60 rule sets (about 17 s, in parallel files). A change is not done until lint, typecheck and tests pass. CI also runs `format:check` and `build`. Node 24 (`.nvmrc`).
 
 How the engine boundary is enforced (do not weaken either layer):
 
