@@ -1,13 +1,16 @@
 import type { ExperimentResults } from '../../engine/statistics/experimentResults';
 import { simulationSeed } from '../../engine/simulation/rng';
-import { formatCentsGrouped } from '../../shared/money';
+import { formatCentsGrouped, roundStatisticToCents } from '../../shared/money';
 import { STOP_REASONS, type StopReason } from '../../shared/stopReasons';
 
 // Small read-only views over the result table for the live screen and dashboard. Statistics
 // stay in src/engine/statistics; these only count, sample and format.
 
-/** Statistics may be fractional; they are rounded to whole cents only here, for display. */
-export const money = (cents: number): string => formatCentsGrouped(Math.round(cents));
+/**
+ * Statistics may be fractional; they are rounded to whole cents only here, for display, with the
+ * same rule as the exports (spec 10.5), so the screen and the reports always agree.
+ */
+export const money = (cents: number): string => formatCentsGrouped(roundStatisticToCents(cents));
 export const percent = new Intl.NumberFormat('en-AU', {
   style: 'percent',
   maximumFractionDigits: 1,

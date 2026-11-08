@@ -1,7 +1,7 @@
 // Limits and defaults from spec sections 9 and 10.9 and plan section 16.
 // Caps are initial values; Phase 9 confirms them by benchmark.
 
-export const SPEC_VERSION = '2.7';
+export const SPEC_VERSION = '2.8';
 export const CONFIG_SCHEMA_VERSION = 1;
 export const CURRENCY = 'AUD';
 

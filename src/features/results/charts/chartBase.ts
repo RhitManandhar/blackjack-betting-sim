@@ -1,4 +1,5 @@
 import type { StrategyId } from '../../../shared/strategies';
+import { roundStatisticToCents } from '../../../shared/money';
 import { STRATEGIES } from '../../../shared/strategies';
 import { chartInk, strategyColor } from '../strategyColors';
 
@@ -15,7 +16,7 @@ export interface ChartTheme {
 
 /** Currency units for display, exact to the cent. */
 export function toUnits(cents: number): number {
-  return Math.round(cents) / 100;
+  return roundStatisticToCents(cents) / 100;
 }
 
 export function strategyName(id: StrategyId): string {
