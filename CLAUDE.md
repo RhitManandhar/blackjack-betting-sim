@@ -2,15 +2,16 @@
 
 Claude Code loads this file automatically from the repository root. It holds the standing rules for every session.
 
-- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.1), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
+- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.2), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
 - **Roadmap, UX and hosting:** `docs/project-plan-v2.md`.
 - The spec is long, so it is not imported here. Read the sections relevant to the task before writing engine, strategy or statistics code.
 
 ## Current status
 
 - Phase 1 (specification freeze): **done** 2026-11-07. `docs/spec.md` v2.0 frozen; D1–D19 and A1–A4 confirmed. v2.1 (2026-11-08) renamed "session" to "simulation" (terminology only).
-- Phase 2 (foundation): local work done 2026-11-07 on branch `phase-2-foundation`. Remaining exit criteria need the user: push to GitHub (CI green) and connect Cloudflare Pages (site loads over HTTPS).
-- Next: Phase 3 (blackjack engine, rules Tier 1).
+- Phase 2 (foundation): **done** 2026-11-08. Merged to `main` (PR #1), CI green, live on Cloudflare Pages over HTTPS.
+- Phase 3 (blackjack engine, rules Tier 1): **done** 2026-11-08 on branch `phase-3-engine` (spec v2.2, pins P1–P6). Chart gate and house-edge gate pass for all 16 Tier 1 rule sets; see `docs/validation.md`. Not yet merged to `main`.
+- Next: Phase 4 (betting strategies).
 - Known: `npm audit` reports a moderate `minimatch` advisory inside ESLint tooling only (dev dependency; `npm audit --omit=dev` is clean). The only fix downgrades ESLint 10 to 9, so it is deliberately left. Recheck when ESLint updates.
 
 Update this section at the end of each phase.
@@ -55,7 +56,7 @@ A personal, browser-only Monte Carlo simulator. The user picks table rules, bank
 
 ## Commands (keep these scripts working)
 
-`npm run dev`, `npm run build`, `npm run preview`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run format` / `npm run format:check`, and `npm run bench:houseedge` (long-running; not part of CI; exits non-zero until Phase 3 implements it). A change is not done until lint, typecheck and tests pass. CI also runs `format:check` and `build`. Node 24 (`.nvmrc`).
+`npm run dev`, `npm run build`, `npm run preview`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run format` / `npm run format:check`, and `npm run bench:houseedge` (the house-edge gate in `scripts/house-edge/`, run through `vitest.houseedge.config.ts`; several minutes; not part of CI; `HOUSE_EDGE_ROUNDS` overrides the 50M rounds per rule set). `npm test` includes the chart gate, which generates all 16 Tier 1 tables (about 20 s). A change is not done until lint, typecheck and tests pass. CI also runs `format:check` and `build`. Node 24 (`.nvmrc`).
 
 How the engine boundary is enforced (do not weaken either layer):
 
@@ -76,7 +77,7 @@ How the engine boundary is enforced (do not weaken either layer):
 - `src/shared` — money helpers, Zod schemas, shared types, constants
 - `docs/spec.md` — the frozen specification and worked examples (golden test data)
 - `docs/project-plan-v2.md` — the project plan and roadmap
-- `docs/validation.md` — published charts and house-edge sources and gate results (created in Phase 3)
+- `docs/validation.md` — published charts and house-edge sources and gate results
 
 Dependencies flow one way: UI and workers may import the engine; the engine imports only `src/shared`. Keep files small and functions single-purpose. Prefer clear names over comments; comment the reason for a rule, not what the line does.
 
