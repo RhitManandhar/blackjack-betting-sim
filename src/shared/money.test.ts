@@ -6,6 +6,7 @@ import {
   formatCentsPlain,
   isCents,
   parseUnitsToCents,
+  roundStatisticToCents,
 } from './money';
 
 describe('floorDivide', () => {
@@ -100,5 +101,23 @@ describe('formatting', () => {
   it('rejects non-integer cents', () => {
     expect(isCents(20.5)).toBe(false);
     expect(() => formatCentsPlain(20.5)).toThrow(RangeError);
+  });
+});
+
+describe('roundStatisticToCents (spec 10.5: halves away from zero)', () => {
+  it.each([
+    [1234.5, 1235],
+    [-1234.5, -1235],
+    [1234.4999, 1234],
+    [-1234.4999, -1234],
+    [0.5, 1],
+    [-0.5, -1],
+    [-0.4, 0],
+    [0, 0],
+    [-2500, -2500],
+  ])('%d cents -> %d', (value, expected) => {
+    const rounded = roundStatisticToCents(value);
+    expect(rounded).toBe(expected);
+    expect(Object.is(rounded, -0)).toBe(false);
   });
 });

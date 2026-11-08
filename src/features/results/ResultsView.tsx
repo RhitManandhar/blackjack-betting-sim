@@ -1,33 +1,20 @@
 import { useState } from 'react';
 import type { ExperimentConfig } from '../../shared/schema';
 import type { StrategyId } from '../../shared/strategies';
-import { targetAmount } from '../../shared/targets';
 import type { RunSnapshot } from '../experiment/run/RunController';
 import { ComparisonGrid } from './ComparisonGrid';
 import { ComparisonTable } from './ComparisonTable';
 import { DashboardCharts } from './DashboardCharts';
+import { ExportPanel } from './ExportPanel';
 import { LivePanel } from './LivePanel';
 import { RankingsPanel } from './RankingsPanel';
+import { RETURN_NOTE, SMALL_SAMPLE_NOTE, STATUS_NOTE, targetBankrollFor } from './resultsText';
 import { count } from './resultsData';
 import { SampleSimulations } from './SampleSimulations';
 import { SummaryCards } from './SummaryCards';
 
 // Live screen (plan 8.2) while running, final dashboard (plan 8.3) once the run ends. Loaded
 // lazily with ECharts so the setup screen stays light.
-
-function targetBankrollFor(config: ExperimentConfig): number | null {
-  if (config.targetMode === 'none') return null;
-  const target = config.targetMode === 'single' ? config.singleTarget : '2_5x';
-  return target === null
-    ? null
-    : config.startingBankroll + targetAmount(config.startingBankroll, target);
-}
-
-const STATUS_NOTE = {
-  complete: '',
-  cancelled: 'Partial results: the run was stopped. Figures cover finished simulations only.',
-  failed: 'Partial results: the run failed. Figures cover finished simulations only.',
-} as const;
 
 interface ResultsViewProps {
   readonly snapshot: RunSnapshot;
@@ -49,7 +36,8 @@ export function ResultsView({ snapshot, config }: ResultsViewProps) {
     />
   );
 
-  if (running || summary === null) {
+  const status = snapshot.status;
+  if (status === 'running' || summary === null) {
     return (
       <div className="space-y-4">
         <LivePanel results={snapshot.results} completed={snapshot.completedSimulations} />
@@ -67,20 +55,19 @@ export function ResultsView({ snapshot, config }: ResultsViewProps) {
     <div className="space-y-4">
       <section aria-label="Results overview">
         <h2 className="text-lg font-semibold">
-          Results{snapshot.status === 'complete' ? '' : ' (partial)'}
+          Results{status === 'complete' ? '' : ' (partial)'}
         </h2>
         <p className="text-sm text-slate-600 dark:text-slate-400">
           {count.format(summary.completedSimulations)} of {count.format(snapshot.totalSimulations)}{' '}
-          simulations, seed {config.experimentSeed}. {STATUS_NOTE[snapshot.status]} Compare return
-          per unit wagered as well as profit: profit in currency mostly follows how much a system
-          wagers.
+          simulations, seed {config.experimentSeed}. {STATUS_NOTE[status]} {RETURN_NOTE}
         </p>
         {smallSample && (
           <p role="note" className="mt-1 text-sm text-amber-800 dark:text-amber-300">
-            Fewer than 100 simulations: treat these figures as rough.
+            {SMALL_SAMPLE_NOTE}
           </p>
         )}
       </section>
+      <ExportPanel config={config} snapshot={snapshot} status={status} summary={summary} />
       <SummaryCards strategies={summary.strategies} />
       <RankingsPanel
         strategies={summary.strategies}

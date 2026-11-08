@@ -2,7 +2,7 @@
 
 Claude Code loads this file automatically from the repository root. It holds the standing rules for every session.
 
-- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.7), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
+- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.8), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
 - **Roadmap, UX and hosting:** `docs/project-plan-v2.md`.
 - The spec is long, so it is not imported here. Read the sections relevant to the task before writing engine, strategy or statistics code.
 
@@ -15,7 +15,7 @@ Claude Code loads this file automatically from the repository root. It holds the
 - Phase 5 (simulation runner and statistics): **done** 2026-11-08, merged to `main` (PR #4). Spec v2.4 pins the checkpoint histogram layout and the curve-point bet field. Runner throughput is about 1.23 µs per round.
 - Phase 6 (worker pool and end-to-end slice): **done** 2026-11-08, merged to `main` (PR #5) and live. Spec v2.5 adds the `failed` run status. Only simulation 1's panel is drawn; the n-panel grid is deferred to Phase 8. Run always starts a fresh experiment.
 - Phase 7 (rules Tier 2 and Tier 3): **done** 2026-11-08, merged to `main` (PR #6). Spec v2.6. Both gates pass for every option; two pinned chart exceptions (`docs/validation.md`).
-- Phase 8 (dashboards and reports): **in progress** in three slices: 8a setup screen (done, merged PR #7), 8b live screen and dashboard (done on branch `phase-8b-dashboard`, not yet merged; spec v2.7; checkpoints capped at 20, user-approved), 8c exports. Agreed 2026-11-08: goal rankings (spec v2.7); bet progression from per-checkpoint bets across all simulations; keep the last 10 experiment summaries in browser storage.
+- Phase 8 (dashboards and reports): **done** 2026-11-08 in three slices: 8a setup screen (PR #7), 8b live screen and dashboard (PR #8; spec v2.7; checkpoints capped at 20, user-approved), 8c exports (branch `phase-8c-exports`, not yet merged; spec v2.8). Goal rankings (spec 10.10); bet progression from per-checkpoint bets; last 10 experiment summaries in browser storage. Exports live in `src/features/results/export/`: CSV 1 and 2 (columns tested against the spec text), and a standalone HTML report with ECharts inlined (loaded only on demand). Screen and exports share one rounding rule (halves away from zero) and one text module (`resultsText.ts`).
 - Known: `npm audit` reports a moderate `minimatch` advisory inside ESLint tooling only (dev dependency; `npm audit --omit=dev` is clean). The only fix downgrades ESLint 10 to 9, so it is deliberately left. Recheck when ESLint updates.
 
 Update this section at the end of each phase.

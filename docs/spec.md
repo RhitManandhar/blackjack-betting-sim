@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026; 2.4 Phase 5 pins 8 November 2026; 2.5 failed run status 8 November 2026; 2.6 rules Tiers 2–3 8 November 2026; 2.7 rankings and bet progression 8 November 2026) |
+| Spec version | **2.8** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026; 2.4 Phase 5 pins 8 November 2026; 2.5 failed run status 8 November 2026; 2.6 rules Tiers 2–3 8 November 2026; 2.7 rankings and bet progression 8 November 2026; 2.8 export formats 8 November 2026) |
 | Results schema version | 1 |
 | Based on | [Project Plan v2](project-plan-v2.md) |
 | Status | **Frozen** 7 November 2026. Decisions D1–D19 and assumptions A1–A4 confirmed by the project owner. Changes need a version bump and a changelog entry (section 13). |
@@ -560,7 +560,7 @@ The same configuration and experiment seed always give identical per-simulation 
 ```ts
 interface ExperimentConfig {
   schemaVersion: 1;
-  specVersion: "2.7";
+  specVersion: "2.8";
   experimentId: string;              // created in the UI
   experimentSeed: number;            // uint32
   simulations: number;                  // 1 .. 50_000 (soft cap, final value from Phase 9)
@@ -679,6 +679,13 @@ Reasons:
 
 UTF-8, comma-separated, header row, `.` as the decimal separator. Money columns are in currency units with exactly two decimals (`-12.50`). Rates are fractions from 0 to 1 with six decimals. Blank cells mean "not applicable / not reached". Each file starts with the header row (no comment lines), and the run status appears as a column.
 
+Pinned in 2.8:
+
+- **Rounding.** A money statistic that is not a whole number of cents (a mean, percentile, standard deviation or interval bound) is rounded to whole cents, halves away from zero (`-1234.5` cents is `-12.35`). The dashboard and the HTML report use the same rule, so every figure matches the CSV. Money totals are integers and are never rounded.
+- **Other averages.** Averages that are neither money nor rates (`avg_rounds_played`, `avg_rounds_to_*`) have exactly two decimals.
+- **Rates.** `return_per_unit_wagered` and its interval are written like rates, with six decimals, and may be negative. A rate that rounds to zero is written `0.000000`, never `-0.000000`.
+- **Format.** Lines end with CRLF (RFC 4180). There is no byte-order mark. A cell is quoted only if it contains a comma, a double quote or a line break; quotes inside are doubled.
+
 ### 10.6 CSV 1 — summary (one row per strategy)
 
 ```
@@ -706,17 +713,18 @@ unavailable_actions, minimum_overshoot_count
 ### 10.7 CSV 2 — per simulation (one row per simulation per strategy)
 
 ```
-experiment_id, simulation_id, simulation_seed, strategy_id, strategy_version,
+experiment_id, run_status, simulation_id, simulation_seed, strategy_id, strategy_version,
 rounds_played, final_bankroll, net_profit, total_wagered, max_wager, max_drawdown,
 first_cross_0_5x, first_cross_1x, first_cross_2x, first_cross_2_5x,
 stop_reason, unavailable_actions, minimum_overshoot_count
 ```
 
-Rows are ordered by `simulation_id`, then by strategy in configuration order. Every completed simulation is included, written in chunks with a size warning.
+Rows are ordered by `simulation_id`, then by strategy in configuration order. Every completed simulation is included, written in chunks with a size warning. `run_status` (added in 2.8, as section 10.5 requires) repeats the run status on every row, so a file from a cancelled or failed run is marked partial. `simulation_id` is zero-based; the UI shows simulation `id + 1`. `final_bankroll` is the starting bankroll plus `net_profit`.
 
 ### 10.8 HTML report and JSON
 
 - The HTML report embeds at most 500 simulations per strategy: the first 500 by `simulation_id`, so the sample is deterministic.
+- The HTML report (detailed in 2.8) is one file with the chart library, styling and data inlined and no external references, so it works offline. It contains the configuration, seed, table rules and strategy rules; the run status (complete or partial, with completed and total simulations); the comparison table; the rankings for every goal, every target and every checkpoint; the dashboard charts; target attainment and checkpoint tables; the comparison-grid panels; and the simulation sample. Its figures come from the same summary, formatting and rounding as the dashboard.
 - The JSON download is the `ExperimentConfig` (section 9). Importing it and running again reproduces the run exactly.
 
 ---
@@ -801,3 +809,4 @@ These close gaps the plan left open. All are confirmed by the project owner (7 N
 | 2.5 | 2026-11-08 | Phase 6 decisions, agreed with the project owner. **Run status (10.4):** new `failed` status after a chunk fails three times, with partial results kept. Stop All discards chunks still running, including simulations in them that had already finished, so only whole chunks are counted. No change to any simulated result. |
 | 2.6 | 2026-11-08 | Rules Tiers 2 and 3, agreed with the project owner and passed by both gates (`docs/validation.md`). **Rules (5.1, 5.3):** 1, 2 and 4 decks; late surrender (initial hand only, after the peek, loses `b − floor(b/2)`, never blocked by funds); doubling on 9–11 or 10–11 means the hand's total, so no soft doubles; at most 2 or 3 split hands; re-split aces; penetration 50–90% in steps of 5. **Solver (6.1):** legality is decided per hand, surrender is part of the pair decision. **Shoe (8.3):** a shoe that runs out mid-round reuses its discards, then reshuffles before the next round. **Gates (6.3):** scope, pair rows and two agreed chart exceptions. Tier 1 results are unchanged: a Tier 1 shoe never runs out mid-round. |
 | 2.7 | 2026-11-08 | Phase 8 dashboard decisions, agreed with the project owner. **Rankings by goal (10.10):** metric, interval and verdict rules for the five goals. **Bet progression (10.1, 10.2):** new `checkpointBet` field (bet in each checkpoint round, `null` once stopped) with exact mean and 95th percentile among strategies still playing; at most 20 checkpoints (section 9) to bound memory. **Summary additions (10.2, 10.3):** share at or above break-even with its Wilson interval, exact drawdown percentiles, checkpoint mean interval, and 25th/75th checkpoint percentiles. No change to any simulated result. |
+| 2.8 | 2026-11-08 | Phase 8 export decisions, agreed with the project owner. **CSV conventions (10.5):** statistics are rounded to whole cents with halves away from zero, on screen and in the reports alike; non-money averages have two decimals; CRLF line endings, no byte-order mark, RFC 4180 quoting. **CSV 2 (10.7):** new `run_status` column after `experiment_id`, as 10.5 already required. **HTML report (10.8):** contents and the offline rule. No change to any simulated result. |

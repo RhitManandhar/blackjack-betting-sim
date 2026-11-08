@@ -44,6 +44,16 @@ export function parseUnitsToCents(input: string): Cents | null {
   return isCents(cents) ? cents : null;
 }
 
+/**
+ * Rounds a fractional statistic (a mean, percentile or interval bound, in cents) to whole cents
+ * for display and export, halves away from zero (spec 10.5, pinned in 2.8). Money totals are
+ * already integers and pass through unchanged. Never used for payouts or bankroll arithmetic.
+ */
+export function roundStatisticToCents(value: number): Cents {
+  const rounded = Math.sign(value) * Math.round(Math.abs(value));
+  return rounded === 0 ? 0 : rounded;
+}
+
 /** "-1234.50" style: two decimals, no grouping. Used for CSV and JSON. */
 export function formatCentsPlain(cents: Cents): string {
   assertCents(cents);
