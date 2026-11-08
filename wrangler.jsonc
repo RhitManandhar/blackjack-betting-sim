@@ -1,0 +1,11 @@
+// Cloudflare Workers static-assets deployment. No Worker script: the site is the Vite build
+// in dist/, served as a single-page app. Keeps every branch's deploy explicit instead of
+// relying on wrangler's auto-detection. "name" must match the Worker's name in Cloudflare.
+{
+  "name": "blackjack-betting-sim",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+  },
+}
