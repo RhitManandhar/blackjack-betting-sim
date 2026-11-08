@@ -13,7 +13,9 @@ Loaded by Claude Code when working in this folder. The root `CLAUDE.md` rules st
 - `basic-strategy/solver.ts` generates a table per rule set; `getStrategyTable` caches it by `ruleSetKey`, which covers every rule field. Never hand-copy a chart into engine code. Reference charts live only in `basic-strategy/__fixtures__` and are read only by the chart gate test.
 - Solver EVs are probabilities, so floating point is correct there. Money never passes through the solver.
 - Dealer probabilities come from `dealerOutcomes.ts`, which enumerates terminal multisets once per upcard. `dealerOutcomes.test.ts` checks it against a plain recursive walk. Keep that test when optimising.
-- Only Tier 1 rules are implemented. `assertTier1Rules` refuses anything else; lift a restriction only together with its validation in Phase 7.
+- All Tier 1–3 rule options are implemented and validated (spec 2.6). `assertSupportedRules` refuses anything else. A new option needs both gates before it is offered (`src/features/experiment/ruleOptions.ts`).
+- Legality is decided per hand at play time (`doubleAllowedOnTotal`, DAS, surrender only on the initial hand). The table stores raw EVs. `renderChart(table, rules)` applies the same legality, so the chart gate checks exactly what is played.
+- A shoe that runs out mid-round reuses its discards (`shoe.ts`, spec 8.3). Never add a mid-round reshuffle of the whole shoe.
 
 ## Betting strategies
 
@@ -38,5 +40,5 @@ Loaded by Claude Code when working in this folder. The root `CLAUDE.md` rules st
 
 ## Gates
 
-- Chart gate: `basic-strategy/chartGate.test.ts`, part of `npm test`.
-- House-edge gate: `npm run bench:houseedge` (`scripts/house-edge/`). It takes several minutes and runs only when the user asks. Record each result in `docs/validation.md`.
+- Chart gate: `basic-strategy/chartGate.*.test.ts`, one file per deck count plus options, part of `npm test`. References and two agreed, pinned exceptions are in `basic-strategy/__fixtures__/`.
+- House-edge gate: `npm run bench:houseedge` runs everything (about 7 minutes); `npm run bench:houseedge -- t2` runs only Tiers 2–3 (`scripts/house-edge/`). Run it only when the user asks, and record each result in `docs/validation.md`.

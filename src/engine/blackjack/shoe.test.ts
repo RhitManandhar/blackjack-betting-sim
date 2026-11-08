@@ -83,6 +83,57 @@ describe('reshuffleIfDue (spec 8.3)', () => {
   });
 });
 
+describe('running out mid-round (spec 8.3, pinned in 2.6)', () => {
+  function shoeMidRound() {
+    const shoe = createShoe(1, 75, new Rng(8));
+    shoe.next = 40;
+    expect(reshuffleIfDue(shoe)).toBe(true); // 40 >= cut card 39
+    shoe.next = 40; // a round starting at card 40 of 52, as if the cut card were later
+    shoe.roundStart = 40;
+    return shoe;
+  }
+
+  it('reuses only the discards, leaving the cards of the current round alone', () => {
+    const shoe = shoeMidRound();
+    const discardsBefore = countValues(shoe.cards.slice(0, 40));
+    const inPlayBefore = Array.from(shoe.cards.slice(40));
+    for (let draw = 0; draw < 12; draw += 1) drawCard(shoe);
+    expect(shoe.next).toBe(52);
+
+    const card = drawCard(shoe); // the 13th card: the shoe is empty, so discards are reused
+    expect(shoe.limit).toBe(40);
+    expect(shoe.next).toBe(1);
+    expect(shoe.mustReshuffle).toBe(true);
+    expect(card).toBe(shoe.cards[0]);
+    expect(countValues(shoe.cards.slice(0, 40))).toEqual(discardsBefore);
+    expect(Array.from(shoe.cards.slice(40))).toEqual(inPlayBefore);
+  });
+
+  it('reshuffles the whole shoe before the next round', () => {
+    const shoe = shoeMidRound();
+    for (let draw = 0; draw < 15; draw += 1) drawCard(shoe);
+    expect(reshuffleIfDue(shoe)).toBe(true);
+    expect(shoe.next).toBe(0);
+    expect(shoe.limit).toBe(52);
+    expect(shoe.mustReshuffle).toBe(false);
+    expect(countValues(shoe.cards)).toEqual(countValues(buildOrderedCards(1)));
+  });
+
+  it('is deterministic for the same seed', () => {
+    const draws = () => {
+      const shoe = shoeMidRound();
+      return Array.from({ length: 20 }, () => drawCard(shoe));
+    };
+    expect(draws()).toEqual(draws());
+  });
+
+  it('fails loudly if even the discards run out in the same round', () => {
+    const shoe = shoeMidRound();
+    for (let draw = 0; draw < 52; draw += 1) drawCard(shoe);
+    expect(() => drawCard(shoe)).toThrow(/ran out/);
+  });
+});
+
 describe('stacked shoe', () => {
   it('deals in the given order and never reshuffles', () => {
     const shoe = createStackedShoe([10, 1, 5]);

@@ -8,6 +8,7 @@ import { browserWorkerFactory, logicalCores } from './run/browserWorker';
 import { RunController, type RunSnapshot } from './run/RunController';
 import { estimateRuntimeSeconds, resolveWorkerCount } from './run/runPlanning';
 import { RunForm } from './RunForm';
+import { RulesForm } from './RulesForm';
 import { RunProgress } from './RunProgress';
 import { buildConfig, draftFromConfig } from './runFormConfig';
 import { SettingRow, SettingsSection } from './SettingsSection';
@@ -78,6 +79,14 @@ export function ExperimentPage() {
         onChange={setDraft}
         onNewSeed={() => {
           setDraft({ ...draft, seed: String(createExperimentIdentity().experimentSeed) });
+        }}
+      />
+
+      <RulesForm
+        rules={draft.rules}
+        disabled={running}
+        onChange={(rules) => {
+          setDraft({ ...draft, rules });
         }}
       />
 

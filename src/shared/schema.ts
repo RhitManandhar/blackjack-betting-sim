@@ -22,8 +22,8 @@ export const ruleSetSchema = z.strictObject({
   lateSurrender: z.boolean(),
   maxSplitHands: z.union([z.literal(2), z.literal(3), z.literal(4)]),
   resplitAces: z.boolean(),
-  // The configurable penetration range is decided in Phase 7 (spec 5.1, Tier 3).
-  penetrationPercent: z.literal(75),
+  // Spec 5.1, Tier 3 (pinned in 2.6): 50-90% in steps of 5.
+  penetrationPercent: z.int().min(50).max(90).multipleOf(5),
 });
 
 export type RuleSet = z.infer<typeof ruleSetSchema>;

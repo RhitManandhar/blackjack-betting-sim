@@ -2,7 +2,7 @@
 
 Claude Code loads this file automatically from the repository root. It holds the standing rules for every session.
 
-- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.5), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
+- **Source of truth:** `docs/spec.md`, the frozen simulation specification (v2.6), with exact definitions, schemas, CSV columns and worked examples. If code and spec disagree, flag it instead of silently choosing one.
 - **Roadmap, UX and hosting:** `docs/project-plan-v2.md`.
 - The spec is long, so it is not imported here. Read the sections relevant to the task before writing engine, strategy or statistics code.
 
@@ -13,7 +13,8 @@ Claude Code loads this file automatically from the repository root. It holds the
 - Phase 3 (blackjack engine, rules Tier 1): **done** 2026-11-08 on branch `phase-3-engine` (spec v2.2, pins P1–P6). Chart gate and house-edge gate pass for all 16 Tier 1 rule sets; see `docs/validation.md`. Merged to `main` (PR #2); deploys use `wrangler.jsonc` (static assets, `previews` block for branch previews).
 - Phase 4 (betting strategies): **done** 2026-11-08, merged to `main` (PR #3). Spec v2.3 corrected an Oscar's Grind note.
 - Phase 5 (simulation runner and statistics): **done** 2026-11-08, merged to `main` (PR #4). Spec v2.4 pins the checkpoint histogram layout and the curve-point bet field. Runner throughput is about 1.23 µs per round.
-- Phase 6 (worker pool and end-to-end slice): **done** 2026-11-08 on branch `phase-6-workers`; not yet merged. The user confirmed the browser checks: responsive page, Stop All, a new run after a cancellation, identical results with 1/2/4 workers, and chart tooltips. Spec v2.5 adds the `failed` run status. ECharts is lazy-loaded with the chart. Only simulation 1's panel is drawn; the user chose to leave the n-panel comparison grid (spec 10.9) to Phase 8. A cancelled run is never resumed: Run always starts a fresh experiment.
+- Phase 6 (worker pool and end-to-end slice): **done** 2026-11-08, merged to `main` (PR #5) and live. Spec v2.5 adds the `failed` run status. Only simulation 1's panel is drawn; the n-panel grid is deferred to Phase 8. Run always starts a fresh experiment.
+- Phase 7 (rules Tier 2 and Tier 3): **done** 2026-11-08 on branch `phase-7-rules`; not yet merged. Spec v2.6. Both gates pass for every option; two borderline chart cells are agreed, pinned exceptions (`docs/validation.md`). The rule controls are on the run screen.
 - Known: `npm audit` reports a moderate `minimatch` advisory inside ESLint tooling only (dev dependency; `npm audit --omit=dev` is clean). The only fix downgrades ESLint 10 to 9, so it is deliberately left. Recheck when ESLint updates.
 
 Update this section at the end of each phase.
@@ -58,7 +59,7 @@ A personal, browser-only Monte Carlo simulator. The user picks table rules, bank
 
 ## Commands (keep these scripts working)
 
-`npm run dev`, `npm run build`, `npm run preview`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run format` / `npm run format:check`, and `npm run bench:houseedge` (the house-edge gate in `scripts/house-edge/`, run through `vitest.houseedge.config.ts`; several minutes; not part of CI; `HOUSE_EDGE_ROUNDS` overrides the 50M rounds per rule set). `npm test` includes the chart gate, which generates all 16 Tier 1 tables (about 20 s). A change is not done until lint, typecheck and tests pass. CI also runs `format:check` and `build`. Node 24 (`.nvmrc`).
+`npm run dev`, `npm run build`, `npm run preview`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run format` / `npm run format:check`, and `npm run bench:houseedge` (the house-edge gate in `scripts/house-edge/`, run through `vitest.houseedge.config.ts`; about 7 minutes for all 38 rule sets; `-- t2` for Tiers 2–3 only; not part of CI; `HOUSE_EDGE_ROUNDS` overrides the 50M rounds per rule set). `npm test` includes the chart gate for 60 rule sets (about 17 s, in parallel files). A change is not done until lint, typecheck and tests pass. CI also runs `format:check` and `build`. Node 24 (`.nvmrc`).
 
 How the engine boundary is enforced (do not weaken either layer):
 

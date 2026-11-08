@@ -8,22 +8,34 @@ export const Action = {
   Hit: 1,
   Double: 2,
   Split: 3,
+  Surrender: 4,
 } as const;
 
 export type Action = (typeof Action)[keyof typeof Action];
 
-/** Best of stand, hit and (when allowed) double for a total cell. */
+/** Late surrender gives up half the bet: EV −0.5 of the initial bet (spec 5.3, 5.5). */
+export const SURRENDER_EV = -0.5;
+
+/** Best of stand, hit, and (when allowed) double and surrender for a total cell. */
 export function bestTotalAction(
   table: StrategyTable,
   row: number,
   upcard: number,
   doubleAllowed: boolean,
+  surrenderAllowed = false,
 ): Action {
   const index = cellIndex(row, upcard);
   const stand = table.stand[index] ?? 0;
   const hit = table.hit[index] ?? 0;
-  if (doubleAllowed && (table.double[index] ?? 0) > Math.max(stand, hit)) return Action.Double;
-  return hit > stand ? Action.Hit : Action.Stand;
+  let best: Action = hit > stand ? Action.Hit : Action.Stand;
+  let bestEv = Math.max(hit, stand);
+  const double = table.double[index] ?? 0;
+  if (doubleAllowed && double > bestEv) {
+    best = Action.Double;
+    bestEv = double;
+  }
+  if (surrenderAllowed && SURRENDER_EV > bestEv) best = Action.Surrender;
+  return best;
 }
 
 /** Whether splitting beats the best way of playing the pair unsplit. */

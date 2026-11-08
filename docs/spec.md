@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026; 2.4 Phase 5 pins 8 November 2026; 2.5 failed run status 8 November 2026) |
+| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026; 2.4 Phase 5 pins 8 November 2026; 2.5 failed run status 8 November 2026; 2.6 rules Tiers 2–3 8 November 2026) |
 | Results schema version | 1 |
 | Based on | [Project Plan v2](project-plan-v2.md) |
 | Status | **Frozen** 7 November 2026. Decisions D1–D19 and assumptions A1–A4 confirmed by the project owner. Changes need a version bump and a changelog entry (section 13). |
@@ -237,7 +237,7 @@ Notes:
 | Late surrender | off | on / off | 2 |
 | Maximum split hands | 4 | 2, 3, 4 | 2 |
 | Split aces | one card each, no re-split | + re-split aces option | 2 |
-| Shoe penetration | 75% | configurable range (set in Phase 7) | 3 |
+| Shoe penetration | 75% | 50–90% in steps of 5 (pinned in 2.6) | 3 |
 | Dealer peek | American hole card, peeks with A or 10-value upcard | fixed | — |
 | Insurance / even money | never taken | fixed | — |
 
@@ -258,9 +258,9 @@ A rule option appears in the UI only after its tier passes validation (section 6
 - Ace counts 11 unless that busts the hand; then it counts 1. A hand is **soft** if an ace is currently counted as 11.
 - A **natural** is an ace plus a 10-value card as the first two cards of the initial hand. Two cards totalling 21 after a split are **not** a natural and pay 1:1.
 - Split: two cards of equal value form a pair, so any two 10-value cards count as a pair, as in published charts. Basic strategy never splits them, so this does not change results. Each split hand gets a stake equal to the initial bet. Re-split up to the maximum number of hands.
-- Split aces: each ace gets exactly one card. No hit, no double. No re-split unless the Tier 2 option is on.
-- Double: one more card, stake doubled. Allowed on first two cards of a hand (subject to the doubling rule and DAS).
-- Surrender (Tier 2, late): only on the initial two-card hand, after the dealer has peeked.
+- Split aces: each ace gets exactly one card. No hit, no double. With the re-split aces option on, an ace that receives another ace may be split again, up to the maximum number of hands; the new ace again receives one card. Otherwise an ace pair after a split stands as soft 12.
+- Double: one more card, stake doubled. Allowed on the first two cards of a hand, subject to the doubling rule and DAS. Pinned in 2.6: "double on 9–11" and "10–11" restrict doubling by the hand's total, so a soft hand (total 13 or more) can never be doubled under a restriction. The same restriction applies to split hands when DAS is on.
+- Surrender (Tier 2, late): only on the initial two-card hand, after the dealer has peeked, so a dealer blackjack still takes the whole bet. Never after a split. The player loses `b − floor(b / 2)` (5.5), the round ends and the dealer does not play. Surrender needs no extra stake, so funds can never make it unavailable.
 - A busted player hand loses even if the dealer then busts.
 
 ### 5.4 When funds are short
@@ -328,6 +328,7 @@ Phase 3 turns these into card-exact tests with fixed shoe orders.
 - *Pair cells.* The split decision compares the EV of splitting with the best non-split EV of that exact pair. If the pair is not split, it is played by its total cell.
 - *Split EV.* The approximation is fixed and standard. Remove the upcard and both pair cards, and let q be the probability of drawing another pair card. Compute the expected number of finished hands and of hands left as an unsplit pair once the hand limit is reached, holding q fixed. Split EV is (finished hands × average EV of a post-split hand whose second card is not the pair card) + (unsplit hands × EV of the unsplit pair). A post-split hand may double only with DAS. Split aces receive one card and stand.
 - *Where.* Tables are generated at run time and cached in memory per rule-set key. Generation takes about 1.3 s per rule set on a current laptop core.
+- *Legality (pinned in 2.6).* Cells store the raw EV of doubling; whether a double is allowed (doubling restriction, DAS) is decided for each hand when it is played. Late surrender has EV −0.5 and is offered only on the initial two-card hand. The pair decision's "not splitting" value uses the same legality for that exact pair: a double only where the restriction allows it, and surrender when it is on. If surrender is best and the pair is not split, the hand surrenders. Split hands may double only when DAS is on and the restriction allows the total.
 
 ### 6.2 Decision rule
 
@@ -336,7 +337,10 @@ The player always takes the highest-EV legal action from the table for the curre
 ### 6.3 Correctness gates (per rule set, before its options appear in the UI)
 
 1. **Chart gate.** The generated table matches a published total-dependent chart for that rule set, cell by cell. The source of each reference chart is cited in the test file.
-2. **House-edge gate.** A flat-betting run of tens of millions of rounds gives a house edge within the 99% confidence interval of the published value for that rule set. The published values and their sources are recorded in `docs/validation.md` in Phase 3. Do not weaken or skip these checks.
+   - Pair rows record only split or no split, because an unsplit pair is played by its total (6.1).
+   - Where no chart is published (the doubling restrictions), only total rows are compared, against the base chart with forbidden doubles replaced by their fallback.
+   - Agreed exceptions (2.6): hard 11 vs A with 2 decks and S17, and 9,9 vs A with 1 deck, H17 and DAS. Each differs from the published chart by a small EV margin. The test asserts each exactly and pins its margin, and `docs/validation.md` records the numbers.
+2. **House-edge gate.** A flat-betting run of tens of millions of rounds gives a house edge within the 99% confidence interval of the published value for that rule set. The published values and their sources are recorded in `docs/validation.md`. Options are validated one at a time: every deck count with S17/H17 and DAS on/off, then each other option from the 6-deck baseline, plus surrender with one deck and penetration at 50% and 90%. Do not weaken or skip these checks.
 
 ---
 
@@ -541,8 +545,9 @@ Same setup as 7.1 unless stated. Each line is: starting state → outcome(s) →
 ### 8.3 Shoe
 
 - The shoe is built in a fixed card order, then shuffled by Fisher–Yates from the last index down. Pinned in 2.2: the order is deck by deck, ranks A, 2, …, 10, J, Q, K, with four cards of each rank. Cards are stored by blackjack value, so J, Q and K are 10. Each step `i` from `n − 1` down to `1` swaps index `i` with `j = nextBelow(i + 1)`. With seed 0 and 6 decks, the first ten cards after the first shuffle are `10, 4, 3, 4, 9, 2, 2, 10, 5, 10`.
-- Cut card position = `floor(totalCards × penetration)`.
+- Cut card position = `floor(totalCards × penetration)`, with penetration 50–90% in steps of 5.
 - The reshuffle check happens **only before a round**: if cards dealt ≥ cut card position, the whole shoe is reshuffled with the same RNG stream. A round never reshuffles in the middle. There is no burn card. The shoe is shuffled once when it is created. A reshuffle shuffles the current card array in place; it does not restore the fixed order first.
+- **Running out mid-round (pinned in 2.6).** A small shoe can run out during a round (for example one deck at 90% penetration with several splits). The discards are then reused: the cards dealt in earlier rounds since the last shuffle, never the cards of the current round. They are shuffled in their own positions by Fisher–Yates from the last index down, with the same RNG. Dealing continues from the first of them, and the whole shoe is reshuffled before the next round. If even the discards run out in the same round, the simulation stops with an error rather than inventing cards. That would need a whole deck's worth of cards in a single round, which has never occurred in testing.
 
 ### 8.4 Determinism contract
 
@@ -555,7 +560,7 @@ The same configuration and experiment seed always give identical per-simulation 
 ```ts
 interface ExperimentConfig {
   schemaVersion: 1;
-  specVersion: "2.5";
+  specVersion: "2.6";
   experimentId: string;              // created in the UI
   experimentSeed: number;            // uint32
   simulations: number;                  // 1 .. 50_000 (soft cap, final value from Phase 9)
@@ -768,3 +773,4 @@ These close gaps the plan left open. All are confirmed by the project owner (7 N
 | 2.3 | 2026-11-08 | Wording only, no change in behaviour. Corrected the note under Oscar's Grind (4.3): the cycle-goal cap holds after a loss or push except when the bet was forced up to the table minimum, which can stay above `needed` through pushes. The overshoot is recorded once, when it is set. Found by the Phase 4 property tests. |
 | 2.4 | 2026-11-08 | Phase 5 pins, agreed with the project owner. **Checkpoint histogram layout (10.3):** 400 equal bins from −B to +3B, plus underflow and overflow bins, the bin formula and the approximate-percentile rule. **Curve points (10.9):** each point also records that round's initial bet, for the tooltip. No change to any simulated result. |
 | 2.5 | 2026-11-08 | Phase 6 decisions, agreed with the project owner. **Run status (10.4):** new `failed` status after a chunk fails three times, with partial results kept. Stop All discards chunks still running, including simulations in them that had already finished, so only whole chunks are counted. No change to any simulated result. |
+| 2.6 | 2026-11-08 | Rules Tiers 2 and 3, agreed with the project owner and passed by both gates (`docs/validation.md`). **Rules (5.1, 5.3):** 1, 2 and 4 decks; late surrender (initial hand only, after the peek, loses `b − floor(b/2)`, never blocked by funds); doubling on 9–11 or 10–11 means the hand's total, so no soft doubles; at most 2 or 3 split hands; re-split aces; penetration 50–90% in steps of 5. **Solver (6.1):** legality is decided per hand, surrender is part of the pair decision. **Shoe (8.3):** a shoe that runs out mid-round reuses its discards, then reshuffles before the next round. **Gates (6.3):** scope, pair rows and two agreed chart exceptions. Tier 1 results are unchanged: a Tier 1 shoe never runs out mid-round. |

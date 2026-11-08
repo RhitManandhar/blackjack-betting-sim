@@ -5,7 +5,7 @@ import { getStrategyTable } from '../basic-strategy/solver';
 import { type StrategyTable, totalRow } from '../basic-strategy/table';
 import { ACE, bestTotal, isNaturalPair } from './cards';
 import { dealerPeeks, isDealerBlackjack, playDealerHand } from './dealer';
-import { assertTier1Rules } from './rules';
+import { assertSupportedRules, doubleAllowedOnTotal } from './rules';
 import { type Shoe, drawCard, reshuffleIfDue } from './shoe';
 
 // One round of blackjack (spec 5.2-5.5), played by basic strategy and settled in integer cents.
@@ -60,7 +60,7 @@ export interface RoundContext {
 }
 
 export function createRoundContext(rules: RuleSet): RoundContext {
-  assertTier1Rules(rules);
+  assertSupportedRules(rules);
   const isThreeToTwo = rules.blackjackPayout === '3:2';
   return {
     rules,
@@ -169,18 +169,17 @@ export function playRound(
 
     for (;;) {
       const twoCards = context.cardCount[hand] === 2;
-      if (context.splitAces[hand] === 1 && twoCards) {
-        // Split aces take exactly one card; no re-split in Tier 1.
-        break;
-      }
+      const pairValue = context.firstCard[hand] ?? 0;
+      const isPair = twoCards && pairValue === context.secondCard[hand];
+      const splitAcesHand = context.splitAces[hand] === 1;
+      // Split aces take exactly one card; only a second ace may be re-split, and only with RSA.
+      if (splitAcesHand && !(isPair && rules.resplitAces)) break;
       const best = handBest(context, hand);
       if (best >= 21) break;
 
       const available = bankrollBefore - committed;
       let fundsShortCounted = false;
 
-      const pairValue = context.firstCard[hand] ?? 0;
-      const isPair = twoCards && pairValue === context.secondCard[hand];
       if (isPair && handCount < rules.maxSplitHands && prefersSplit(table, pairValue, upcard)) {
         if (available >= bet) {
           insertHandAfter(context, hand, handCount);
@@ -194,15 +193,27 @@ export function playRound(
         result.unavailableActions += 1;
         fundsShortCounted = true;
       }
+      if (splitAcesHand) break; // an ace that was not re-split stands on its one card
 
+      const isInitialHand = context.fromSplit[hand] === 0;
       const row = totalRow(context.hardSum[hand] ?? 0, context.hasAce[hand] === 1);
-      const doubleLegal = twoCards && (context.fromSplit[hand] === 0 || rules.doubleAfterSplit);
-      let action = bestTotalAction(table, row, upcard, doubleLegal);
+      const doubleLegal =
+        twoCards && (isInitialHand || rules.doubleAfterSplit) && doubleAllowedOnTotal(rules, best);
+      // Late surrender: only the initial two-card hand, after the peek (spec 5.3).
+      const surrenderLegal = rules.lateSurrender && isInitialHand && twoCards;
+      let action = bestTotalAction(table, row, upcard, doubleLegal, surrenderLegal);
       if (action === Action.Double && available < (context.stake[hand] ?? 0)) {
         if (!fundsShortCounted) result.unavailableActions += 1;
-        action = bestTotalAction(table, row, upcard, false);
+        action = bestTotalAction(table, row, upcard, false, surrenderLegal);
       }
 
+      if (action === Action.Surrender) {
+        // Spec 5.5: lose b − floor(b / 2); the house keeps an odd cent. The dealer does not play.
+        result.netProfit = -(bet - floorDivide(bet, 2));
+        result.outcome = Outcome.Loss;
+        result.totalWagered = bet;
+        return;
+      }
       if (action === Action.Stand) break;
       if (action === Action.Double) {
         committed += context.stake[hand] ?? 0;

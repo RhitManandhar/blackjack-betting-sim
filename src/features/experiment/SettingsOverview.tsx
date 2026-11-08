@@ -90,7 +90,7 @@ export function SettingsOverview({ config }: { readonly config: ExperimentConfig
         </p>
       </SettingsSection>
 
-      <SettingsSection title="Table rules (recommended baseline)">
+      <SettingsSection title="Table rules in use">
         <dl>
           {describeRules(config.rules).map(([label, value]) => (
             <SettingRow key={label} label={label} value={value} />

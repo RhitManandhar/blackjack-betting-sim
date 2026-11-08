@@ -129,8 +129,18 @@ describe('experimentConfigSchema', () => {
   it.each([
     { name: 'unsupported deck count', rules: { decks: 3 }, path: 'rules.decks' },
     {
-      name: 'unvalidated penetration',
-      rules: { penetrationPercent: 80 },
+      name: 'penetration off the 5% steps',
+      rules: { penetrationPercent: 72 },
+      path: 'rules.penetrationPercent',
+    },
+    {
+      name: 'penetration below 50%',
+      rules: { penetrationPercent: 45 },
+      path: 'rules.penetrationPercent',
+    },
+    {
+      name: 'penetration above 90%',
+      rules: { penetrationPercent: 95 },
       path: 'rules.penetrationPercent',
     },
     { name: 'five split hands', rules: { maxSplitHands: 5 }, path: 'rules.maxSplitHands' },

@@ -24,6 +24,8 @@ export interface StrategyTable {
   /** Per pair cell: EV of splitting, and the best EV of not splitting that exact pair. */
   readonly split: Float64Array;
   readonly noSplit: Float64Array;
+  /** Like noSplit but never surrendering; used to render "surrender, else split" (Rp). */
+  readonly noSplitWithoutSurrender: Float64Array;
 }
 
 export function hardRow(total: number): number {
@@ -55,5 +57,6 @@ export function createEmptyTable(ruleKey: string): StrategyTable {
     double: new Float64Array(TOTAL_ROWS * UPCARDS),
     split: new Float64Array(PAIR_ROWS * UPCARDS),
     noSplit: new Float64Array(PAIR_ROWS * UPCARDS),
+    noSplitWithoutSurrender: new Float64Array(PAIR_ROWS * UPCARDS),
   };
 }
