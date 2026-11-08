@@ -2,7 +2,7 @@
 
 Loaded by Claude Code when working in this folder. The root `CLAUDE.md` rules still apply.
 
-- `simulation.worker.ts` is a thin wrapper. All logic lives in `chunkRunner.ts`, which has no worker globals, so Node tests can run it. The worker is type-checked by `tsconfig.worker.json` (WebWorker lib, no DOM).
+- `simulation.worker.ts` is a thin wrapper around `workerMessageHandler.ts`, which validates messages and drives `chunkRunner.ts`. Neither has worker globals, so Node tests and the Node benchmark worker (`scripts/perf/nodeWorker.ts`) run the same code. The worker is type-checked by `tsconfig.worker.json` (WebWorker lib, no DOM).
 - `messages.ts` is the only message contract. Both directions are validated with Zod on arrival. Never add a per-round or per-card message. Workers send throttled progress (`PROGRESS_INTERVAL_MS`) and whole chunk results only.
 - Every message carries the run id. The controller (`src/features/experiment/run/RunController.ts`) ignores anything from an older or cancelled run, and each pool slot remembers which run its chunk belongs to.
 - A chunk is a range of simulation indices with no seed of its own. Chunk size and worker count must never change results: `RunController.test.ts` checks 1, 2 and 4 workers with several chunk sizes.

@@ -60,7 +60,7 @@ A personal, browser-only Monte Carlo simulator. The user picks table rules, bank
 
 ## Commands (keep these scripts working)
 
-`npm run dev`, `npm run build`, `npm run preview`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run format` / `npm run format:check`, and `npm run bench:houseedge` (the house-edge gate in `scripts/house-edge/`, run through `vitest.houseedge.config.ts`; about 7 minutes for all 38 rule sets; `-- t2` for Tiers 2–3 only; not part of CI; `HOUSE_EDGE_ROUNDS` overrides the 50M rounds per rule set). `npm test` includes the chart gate for 60 rule sets (about 17 s, in parallel files). A change is not done until lint, typecheck and tests pass. CI also runs `format:check` and `build`. Node 24 (`.nvmrc`).
+`npm run dev`, `npm run build`, `npm run preview`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run format` / `npm run format:check`, and `npm run bench:houseedge` (the house-edge gate in `scripts/house-edge/`, run through `vitest.houseedge.config.ts`; about 7 minutes for all 38 rule sets; `-- t2` for Tiers 2–3 only; not part of CI; `HOUSE_EDGE_ROUNDS` overrides the 50M rounds per rule set). `npm run bench:perf` is the Phase 9 performance benchmark (`scripts/perf/`, about 15–20 minutes; `bench:perf:quick` for a short grid; never in CI); the in-browser version is `/?benchmark`. Results go in `docs/performance.md`. `npm test` includes the chart gate for 60 rule sets (about 17 s, in parallel files). A change is not done until lint, typecheck and tests pass. CI also runs `format:check` and `build`. Node 24 (`.nvmrc`).
 
 How the engine boundary is enforced (do not weaken either layer):
 

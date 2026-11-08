@@ -9,7 +9,8 @@ import { STRATEGIES, STRATEGY_IDS } from '../../../shared/strategies';
 import { finalProfitOption } from '../charts/dashboardCharts';
 import { count, money, percent, rate } from '../resultsData';
 import type { EndedStatus } from '../resultsText';
-import { loadEchartsSource } from './echartsSource';
+import echartsText from 'echarts/dist/echarts.min?raw';
+import { ECHARTS_SOURCE_URL, loadEchartsSource } from './echartsSource';
 import { type ReportInput, buildHtmlReport } from './htmlReport';
 
 const STUB = '/* echarts stub */';
@@ -70,8 +71,19 @@ describe('standalone HTML report (spec 10.8)', () => {
     expect(html).not.toMatch(/https?:\/\//i);
   });
 
-  it('inlines the real ECharts build and stays a few megabytes', async () => {
-    const source = await loadEchartsSource();
+  it('loads the ECharts build from its static file', async () => {
+    expect(ECHARTS_SOURCE_URL).toMatch(/echarts\.min.*\.js$/);
+    const requested: string[] = [];
+    const source = await loadEchartsSource((url) => {
+      requested.push(url);
+      return Promise.resolve(echartsText);
+    });
+    expect(requested).toEqual([ECHARTS_SOURCE_URL]);
+    expect(source).toBe(echartsText);
+  });
+
+  it('inlines the real ECharts build and stays a few megabytes', () => {
+    const source = echartsText;
     expect(source.length).toBeGreaterThan(500_000);
     expect(source).toContain('getInstanceByDom');
     const full = buildHtmlReport(complete, source);
