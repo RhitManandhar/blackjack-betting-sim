@@ -9,8 +9,8 @@ Claude Code loads this file automatically from the repository root. It holds the
 ## Current status
 
 - Phase 1 (specification freeze): **done** 2026-11-07. `docs/spec.md` v2.0 frozen; D1–D19 and A1–A4 confirmed. v2.1 (2026-11-08) renamed "session" to "simulation" (terminology only).
-- Phase 2 (foundation): local work done 2026-11-07 on branch `phase-2-foundation`. Remaining exit criteria need the user: push to GitHub (CI green) and connect Cloudflare Pages (site loads over HTTPS).
-- Next: Phase 3 (blackjack engine, rules Tier 1).
+- Phase 2 (foundation): **done** 2026-11-08. Merged to `main` (PR #1), CI green, live on Cloudflare Pages over HTTPS.
+- Phase 3 (blackjack engine, rules Tier 1): **in progress** on branch `phase-3-engine`. Plan agreed 2026-11-08, including pinned items P1–P6 (spec v2.2).
 - Known: `npm audit` reports a moderate `minimatch` advisory inside ESLint tooling only (dev dependency; `npm audit --omit=dev` is clean). The only fix downgrades ESLint 10 to 9, so it is deliberately left. Recheck when ESLint updates.
 
 Update this section at the end of each phase.
