@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026; 2.4 Phase 5 pins 8 November 2026; 2.5 failed run status 8 November 2026; 2.6 rules Tiers 2–3 8 November 2026) |
+| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026; 2.4 Phase 5 pins 8 November 2026; 2.5 failed run status 8 November 2026; 2.6 rules Tiers 2–3 8 November 2026; 2.7 rankings and bet progression 8 November 2026) |
 | Results schema version | 1 |
 | Based on | [Project Plan v2](project-plan-v2.md) |
 | Status | **Frozen** 7 November 2026. Decisions D1–D19 and assumptions A1–A4 confirmed by the project owner. Changes need a version bump and a changelog entry (section 13). |
@@ -560,7 +560,7 @@ The same configuration and experiment seed always give identical per-simulation 
 ```ts
 interface ExperimentConfig {
   schemaVersion: 1;
-  specVersion: "2.6";
+  specVersion: "2.7";
   experimentId: string;              // created in the UI
   experimentSeed: number;            // uint32
   simulations: number;                  // 1 .. 50_000 (soft cap, final value from Phase 9)
@@ -575,7 +575,7 @@ interface ExperimentConfig {
   strategies: { id: StrategyId; version: string }[];   // 1..5, no duplicates
   paroliStreakLength: number;        // 2 .. 5, default 3
   rules: RuleSet;                    // section 5.1
-  checkpoints: number[];             // ascending, unique, each 1..roundLimit; default [50,100,250,500,1000]
+  checkpoints: number[];             // ascending, unique, each 1..roundLimit, at most 20 (2.7); default [50,100,250,500,1000]
   displayedSimulations: number;         // n panels in the comparison grid: 1 .. min(25, simulations), default 6
   workerCount: "auto" | 1 | 2 | 3 | 4;
 }
@@ -618,12 +618,15 @@ interface StrategySimulationResult {
   minimumOvershootCount: number;     // Oscar's Grind; 0 for others
   minimumOvershootTotal: Cents;      // Oscar's Grind; 0 for others
   checkpointProfit: (Cents)[];       // one per configured checkpoint, frozen profit carried forward
+  checkpointBet: (Cents | null)[];   // 2.7: initial bet placed in each checkpoint round; null once stopped
 }
 ```
 
 **Max drawdown** is the largest fall in bankroll from a previous peak, measured after each round. The starting bankroll counts as the first peak. It is never negative.
 
 **Checkpoint profit** is cumulative profit after round `c`. If the strategy stopped before round `c`, its frozen final profit is used, and charts say "stopped strategies carried forward at their final profit".
+
+**Checkpoint bet** (added in 2.7) is the initial bet placed in round `c`, or `null` if the strategy stopped before round `c`. Unlike profit, a stopped strategy's bet is never carried forward. Checkpoint bets are stored exactly, one value per simulation per strategy per checkpoint; the 20-checkpoint cap (section 9) bounds that memory.
 
 ### 10.2 Statistics definitions
 
@@ -644,6 +647,9 @@ All are per strategy over completed simulations `n`. The UI shows `n` next to ev
 | Bust rate / block rate | Share with stop reason `bust` / `blocked_table_max` |
 | Average wager | `Σ sumInitialBets / Σ roundsPlayed` |
 | Outcome frequencies | Category count / total rounds played |
+| At or above break-even (2.7) | Share with `netProfit ≥ 0`, Wilson CI |
+| Drawdown percentiles (2.7) | Type-7 percentiles (5, 25, 50, 75, 95) of `maxDrawdown`, exact |
+| Bet progression (2.7) | At each checkpoint, over strategies still playing: count and share still playing, exact mean and type-7 95th percentile of `checkpointBet` |
 
 Statistics may be fractional and are rounded to cents only for display. Money totals stay integers. Exact integer accumulators are used so merge order cannot change results; where a sum of squares could exceed 2^53 it uses `BigInt`.
 
@@ -651,7 +657,7 @@ Statistics may be fractional and are rounded to cents only for display. Money to
 
 ### 10.3 Checkpoint aggregates
 
-Per checkpoint and strategy: count, exact integer sum of profit, sum of squares, count profitable, minimum (worst loss), and a fixed-bin histogram. Checkpoint percentiles (5th–95th) come from the histogram and are labelled approximate. The bin layout depends only on the configuration, never on the data, so every worker uses the same bins. It has fixed-width bins plus underflow and overflow bins.
+Per checkpoint and strategy: count, exact integer sum of profit, sum of squares, count profitable, minimum (worst loss), and a fixed-bin histogram. The mean has a 95% interval (`mean ± 1.96·SD/√n`, added in 2.7). Checkpoint percentiles (5th, 25th, 50th, 75th and 95th) come from the histogram and are labelled approximate. The bin layout depends only on the configuration, never on the data, so every worker uses the same bins. It has fixed-width bins plus underflow and overflow bins.
 
 **Layout (pinned in 2.4).** With starting bankroll `B`, there are 400 equal bins covering profit from `−B` to `+3B`, each `[low, high)` and 1% of `B` wide (5.00 at the default 500.00). One underflow bin sits below `−B` and one overflow bin at `+3B` or above. A profit `x` in range goes to bin `floor((x + B) × 400 / 4B)`, computed in integers. An approximate percentile uses type-7 ranks, with the k-th smallest value placed at the midpoint of its share of its bin. Values in the underflow or overflow bin report the range edge.
 
@@ -728,6 +734,26 @@ The grid lets the user see, for individual simulations, how every chosen strateg
 - **Interaction:** clicking a panel enlarges it with tooltips (round, bankroll, bet) and zoom. The same grid appears on the final dashboard and in the HTML report.
 - Curve points are display data only. Statistics never use them.
 
+### 10.10 Rankings by goal (added in 2.7)
+
+Rankings implement plan sections 1 and 7.2. Every ranking is labelled "best under this selected configuration", never a universal best. For each goal, strategies are sorted by one metric, higher being better; ties keep the configuration order.
+
+| Goal | Metric | Interval |
+| --- | --- | --- |
+| 1. Best overall | Return per unit wagered | Ratio interval (10.2) |
+| 2. Minimal loss most of the time | Share at or above break-even | Wilson |
+| 3. Maximum win most of the time | 75th-percentile final profit | none |
+| 4. Reaching a target | Hit rate for the chosen target | Wilson |
+| 5. Ahead or behind at round N | Mean profit at the chosen checkpoint | Mean interval |
+
+The first strategy is the leader. Every other strategy gets a verdict against the leader:
+
+- **inconclusive** if the two 95% intervals overlap, or the values are exactly equal;
+- **lower** if the intervals do not overlap;
+- **no verdict** if the metric has no interval (goal 3).
+
+A **clear leader** is declared only when every other strategy is lower with non-overlapping intervals. Otherwise the page says there is no clear leader and the differences are inconclusive.
+
 ## 11. Confirmed assumptions (plan section 17)
 
 | # | Assumption | Status |
@@ -774,3 +800,4 @@ These close gaps the plan left open. All are confirmed by the project owner (7 N
 | 2.4 | 2026-11-08 | Phase 5 pins, agreed with the project owner. **Checkpoint histogram layout (10.3):** 400 equal bins from −B to +3B, plus underflow and overflow bins, the bin formula and the approximate-percentile rule. **Curve points (10.9):** each point also records that round's initial bet, for the tooltip. No change to any simulated result. |
 | 2.5 | 2026-11-08 | Phase 6 decisions, agreed with the project owner. **Run status (10.4):** new `failed` status after a chunk fails three times, with partial results kept. Stop All discards chunks still running, including simulations in them that had already finished, so only whole chunks are counted. No change to any simulated result. |
 | 2.6 | 2026-11-08 | Rules Tiers 2 and 3, agreed with the project owner and passed by both gates (`docs/validation.md`). **Rules (5.1, 5.3):** 1, 2 and 4 decks; late surrender (initial hand only, after the peek, loses `b − floor(b/2)`, never blocked by funds); doubling on 9–11 or 10–11 means the hand's total, so no soft doubles; at most 2 or 3 split hands; re-split aces; penetration 50–90% in steps of 5. **Solver (6.1):** legality is decided per hand, surrender is part of the pair decision. **Shoe (8.3):** a shoe that runs out mid-round reuses its discards, then reshuffles before the next round. **Gates (6.3):** scope, pair rows and two agreed chart exceptions. Tier 1 results are unchanged: a Tier 1 shoe never runs out mid-round. |
+| 2.7 | 2026-11-08 | Phase 8 dashboard decisions, agreed with the project owner. **Rankings by goal (10.10):** metric, interval and verdict rules for the five goals. **Bet progression (10.1, 10.2):** new `checkpointBet` field (bet in each checkpoint round, `null` once stopped) with exact mean and 95th percentile among strategies still playing; at most 20 checkpoints (section 9) to bound memory. **Summary additions (10.2, 10.3):** share at or above break-even with its Wilson interval, exact drawdown percentiles, checkpoint mean interval, and 25th/75th checkpoint percentiles. No change to any simulated result. |

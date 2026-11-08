@@ -56,7 +56,7 @@ export const experimentConfigSchema = z
     strategies: z.array(strategySelectionSchema).min(1).max(STRATEGY_IDS.length),
     paroliStreakLength: z.int().min(LIMITS.minParoliStreak).max(LIMITS.maxParoliStreak),
     rules: ruleSetSchema,
-    checkpoints: z.array(z.int().min(1)),
+    checkpoints: z.array(z.int().min(1)).max(LIMITS.maxCheckpoints),
     displayedSimulations: z.int().min(1).max(LIMITS.maxDisplayedSimulations),
     workerCount: z.union([
       z.literal('auto'),

@@ -41,6 +41,8 @@ export class StrategyColumns {
   readonly overshootTotal: Float64Array;
   /** One aggregate per configured checkpoint. */
   readonly checkpoints: readonly CheckpointAggregate[];
+  /** One column per checkpoint: the bet placed in that round, NaN once stopped (spec 2.7). */
+  readonly checkpointBets: readonly Float64Array[];
 
   constructor(simulations: number, startingBankroll: number, checkpointCount: number) {
     this.roundsPlayed = new Int32Array(simulations);
@@ -59,6 +61,9 @@ export class StrategyColumns {
     this.unavailableActions = new Int32Array(simulations);
     this.overshootCount = new Int32Array(simulations);
     this.overshootTotal = new Float64Array(simulations);
+    this.checkpointBets = Array.from({ length: checkpointCount }, () =>
+      new Float64Array(simulations).fill(Number.NaN),
+    );
     const layout = checkpointLayout(startingBankroll);
     this.checkpoints = Array.from(
       { length: checkpointCount },
@@ -153,6 +158,10 @@ export class ExperimentResults {
     columns.unavailableActions[simulation] = result.unavailableActionCount;
     columns.overshootCount[simulation] = result.minimumOvershootCount;
     columns.overshootTotal[simulation] = result.minimumOvershootTotal;
+    result.checkpointBet.forEach((bet, index) => {
+      const column = columns.checkpointBets[index];
+      if (column !== undefined) column[simulation] = bet ?? Number.NaN;
+    });
     result.checkpointProfit.forEach((profit, index) => {
       columns.checkpoints[index]?.add(profit);
     });

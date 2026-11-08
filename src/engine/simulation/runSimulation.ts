@@ -49,6 +49,8 @@ export interface StrategySimulationResult {
   readonly minimumOvershootCount: number;
   readonly minimumOvershootTotal: number;
   readonly checkpointProfit: readonly number[];
+  /** Initial bet placed in each checkpoint round; null once the strategy has stopped (spec 2.7). */
+  readonly checkpointBet: readonly (number | null)[];
   readonly curve: CurvePoints | null;
 }
 
@@ -84,6 +86,7 @@ function runStrategy(
   const targetCount = TARGET_IDS.length;
   const firstCrossing: (number | null)[] = new Array<number | null>(targetCount).fill(null);
   const checkpointProfit: number[] = new Array<number>(checkpoints.length).fill(0);
+  const checkpointBet: (number | null)[] = new Array<number | null>(checkpoints.length).fill(null);
   const outcomeCounts: OutcomeCounts = { blackjack: 0, win: 0, push: 0, loss: 0 };
   const curve: CurvePoints | null = recordCurve
     ? { rounds: [0], bankrolls: [startingBankroll], bets: [0] }
@@ -130,6 +133,7 @@ function runStrategy(
     const profit = bankroll - startingBankroll;
     if (nextCheckpoint < checkpoints.length && rounds === checkpoints[nextCheckpoint]) {
       checkpointProfit[nextCheckpoint] = profit;
+      checkpointBet[nextCheckpoint] = bet;
       nextCheckpoint += 1;
     }
     if (curve !== null && rounds % plan.curveStride === 0) {
@@ -191,6 +195,7 @@ function runStrategy(
     minimumOvershootCount: state.minimumOvershootCount,
     minimumOvershootTotal: state.minimumOvershootTotal,
     checkpointProfit,
+    checkpointBet,
     curve,
   };
 }

@@ -170,3 +170,13 @@ describe('full setup fields (Phase 8a)', () => {
     });
   });
 });
+
+describe('checkpoint cap (spec 2.7)', () => {
+  it('accepts 20 checkpoints and rejects 21 on the checkpoints field', () => {
+    const rounds = (count: number) =>
+      Array.from({ length: count }, (_, index) => String((index + 1) * 10)).join(', ');
+    expect(withDraft({ checkpoints: rounds(20) }).ok).toBe(true);
+    const result = withDraft({ checkpoints: rounds(21) });
+    expect(!result.ok && result.errors.checkpoints).toBeTruthy();
+  });
+});

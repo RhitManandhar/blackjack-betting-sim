@@ -184,6 +184,7 @@ function handMade(
     minimumOvershootCount: 0,
     minimumOvershootTotal: 0,
     checkpointProfit: [],
+    checkpointBet: [],
     curve: null,
     ...fields,
   };
@@ -347,5 +348,70 @@ describe('order independence (spec 8.4)', () => {
     for (const index of order) shuffled.add(all[index] ?? []);
 
     expect(summarizeExperiment(shuffled, true)).toEqual(summarizeExperiment(inOrder, true));
+  });
+});
+
+describe('Phase 8b summary additions (spec 2.7)', () => {
+  const config = testConfig({
+    simulations: 30,
+    roundLimit: 200,
+    strategies: [
+      { id: 'flat', version: 'flat-v1' },
+      { id: 'martingale', version: 'martingale-v1' },
+    ],
+    checkpoints: [10, 100, 200],
+  });
+  const plan = createSimulationPlan(config);
+  const results = new ExperimentResults(config);
+  const all = Array.from({ length: config.simulations }, (_, index) => runSimulation(plan, index));
+  for (const simulation of all) results.add(simulation);
+  const summary = summarizeExperiment(results, false);
+
+  it('records the bet at each checkpoint, null once a strategy has stopped', () => {
+    for (const simulation of all) {
+      for (const result of simulation) {
+        result.checkpointBet.forEach((bet, index) => {
+          const round = config.checkpoints[index] ?? 0;
+          if (result.roundsPlayed >= round) expect(bet).toBeGreaterThanOrEqual(config.tableMinimum);
+          else expect(bet).toBeNull();
+        });
+      }
+    }
+  });
+
+  it('summarises bet progression from the strategies still playing', () => {
+    const martingale = summary.strategies[1];
+    for (const [index, checkpoint] of (martingale?.checkpoints ?? []).entries()) {
+      const bets = all
+        .map((simulation) => simulation[1]?.checkpointBet[index] ?? null)
+        .filter((bet): bet is number => bet !== null)
+        .sort((a, b) => a - b);
+      expect(checkpoint.bets.stillPlaying).toBe(bets.length);
+      expect(checkpoint.bets.stillPlayingShare).toBe(bets.length / 30);
+      if (bets.length > 0) {
+        expect(checkpoint.bets.meanBet).toBeCloseTo(
+          bets.reduce((a, b) => a + b, 0) / bets.length,
+          9,
+        );
+        expect(checkpoint.bets.p95Bet).toBeCloseTo(percentileType7(bets, 0.95), 9);
+      }
+    }
+    // Flat never changes its bet, so every still-playing bet is the unit.
+    for (const checkpoint of summary.strategies[0]?.checkpoints ?? []) {
+      if (checkpoint.bets.stillPlaying > 0) expect(checkpoint.bets.meanBet).toBe(config.unit);
+    }
+  });
+
+  it('reports the at-or-above-break-even share and drawdown percentiles', () => {
+    const flat = summary.strategies[0];
+    expect(flat?.atLeastBreakEvenShare).toBeCloseTo(
+      (flat?.profitShare ?? 0) + (flat?.breakEvenShare ?? 0),
+      12,
+    );
+    const drawdowns = all
+      .map((simulation) => simulation[0]?.maxDrawdown ?? 0)
+      .sort((a, b) => a - b);
+    expect(flat?.maxDrawdownPercentiles.median).toBeCloseTo(percentileType7(drawdowns, 0.5), 9);
+    expect(flat?.checkpoints[0]?.meanProfitInterval).not.toBeNull();
   });
 });
