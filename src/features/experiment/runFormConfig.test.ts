@@ -97,3 +97,76 @@ describe('table rules from the form (Phase 7)', () => {
     }
   });
 });
+
+describe('full setup fields (Phase 8a)', () => {
+  it('converts money typed in currency units to cents once', () => {
+    const result = withDraft({
+      startingBankroll: '1,250.50',
+      tableMinimum: '25',
+      unit: '25.00',
+      tableMaximum: '500',
+    });
+    expect(result.ok && result.config).toMatchObject({
+      startingBankroll: 125_050,
+      tableMinimum: 2500,
+      unit: 2500,
+      tableMaximum: 50_000,
+    });
+  });
+
+  it('treats a blank table maximum as no maximum', () => {
+    const result = withDraft({ tableMaximum: '  ' });
+    expect(result.ok && result.config.tableMaximum).toBeNull();
+  });
+
+  it.each([
+    ['startingBankroll', { startingBankroll: '0' }],
+    ['tableMinimum', { tableMinimum: '20.555' }],
+    ['unit', { unit: 'twenty' }],
+    ['tableMaximum', { tableMaximum: '-5' }],
+    ['displayedSimulations', { displayedSimulations: '26' }],
+    ['checkpoints', { checkpoints: '50, abc' }],
+    ['checkpoints', { checkpoints: '0, 100' }],
+  ] as const)('reports a bad %s on that field', (field, change) => {
+    const result = withDraft(change);
+    expect(!result.ok && result.errors[field]).toBeTruthy();
+  });
+
+  it.each([
+    ['unit', { unit: '10' }, /at least the table minimum/],
+    ['unit', { unit: '600' }, /cannot exceed the starting bankroll/],
+    ['tableMaximum', { tableMaximum: '15' }, /at least the starting bet/],
+  ] as const)('maps cross-field rule errors back to %s', (field, change, message) => {
+    const result = withDraft(change);
+    expect(!result.ok && result.errors[field]).toMatch(message);
+  });
+
+  it('uses the chosen target only in single-target mode', () => {
+    const single = withDraft({ targetMode: 'single', singleTarget: '2x' });
+    expect(single.ok && single.config).toMatchObject({ targetMode: 'single', singleTarget: '2x' });
+    const compare = withDraft({ targetMode: 'compare_all', singleTarget: '2x' });
+    expect(compare.ok && compare.config).toMatchObject({
+      targetMode: 'compare_all',
+      singleTarget: null,
+    });
+  });
+
+  it('sorts checkpoints, removes duplicates and says so', () => {
+    const result = withDraft({ checkpoints: '500 100, 100 250' });
+    expect(result.ok && result.config.checkpoints).toEqual([100, 250, 500]);
+    expect(result.ok && result.notes).toContain('Checkpoints were sorted and duplicates removed.');
+  });
+
+  it('allows no checkpoints at all', () => {
+    const result = withDraft({ checkpoints: '' });
+    expect(result.ok && result.config.checkpoints).toEqual([]);
+  });
+
+  it('applies the Paroli streak length and the number of panels', () => {
+    const result = withDraft({ paroliStreakLength: 4, displayedSimulations: '25' });
+    expect(result.ok && result.config).toMatchObject({
+      paroliStreakLength: 4,
+      displayedSimulations: 25,
+    });
+  });
+});

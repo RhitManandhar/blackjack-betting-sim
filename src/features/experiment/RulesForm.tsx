@@ -175,7 +175,8 @@ export function RulesForm({ rules, disabled, onChange }: RulesFormProps) {
         Recommended baseline
       </button>
       <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-        The player always uses perfect basic strategy generated for exactly these rules.
+        The player always uses perfect basic strategy generated for exactly these rules. Fixed
+        rules: American hole card with dealer peek; insurance and even money are never taken.
       </p>
     </SettingsSection>
   );
