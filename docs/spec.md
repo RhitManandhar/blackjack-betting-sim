@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026) |
+| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026; 2.3 note correction 8 November 2026) |
 | Results schema version | 1 |
 | Based on | [Project Plan v2](project-plan-v2.md) |
 | Status | **Frozen** 7 November 2026. Decisions D1–D19 and assumptions A1–A4 confirmed by the project owner. Changes need a version bump and a changelog entry (section 13). |
@@ -218,7 +218,7 @@ After each round with net profit `p`:
 Notes:
 
 - The bet may go **down** after a win when a large win (blackjack, double, split) leaves less than one bet needed.
-- After a loss or push `currentBet ≤ needed` already holds, because a loss only raises `needed`. So "keep the bet" never breaks the cycle-goal cap.
+- After a loss or push, "keep the bet" respects the cycle-goal cap except after a minimum overshoot. A loss only raises `needed`, so a bet set by step 4 to at most `needed` stays at most `needed`. A bet forced up to the table minimum in step 4 can stay above `needed` through one or more pushes. It is still the table minimum, so it is still the smallest legal bet, and it is recorded once, when step 4 sets it, not again on each push.
 - "Normal even-money win" in the plan means `needed` is worked out as if the next round pays 1:1. Larger payouts simply finish the cycle sooner.
 
 ---
@@ -555,7 +555,7 @@ The same configuration and experiment seed always give identical per-simulation 
 ```ts
 interface ExperimentConfig {
   schemaVersion: 1;
-  specVersion: "2.2";
+  specVersion: "2.3";
   experimentId: string;              // created in the UI
   experimentSeed: number;            // uint32
   simulations: number;                  // 1 .. 50_000 (soft cap, final value from Phase 9)
@@ -754,3 +754,4 @@ These close gaps the plan left open. All are confirmed by the project owner (7 N
 | 2.0 | 2026-11-07 | Frozen from Project Plan v2. Added exact definitions, worked examples, schemas and CSV columns. Pre-freeze review added the unique-seed guarantee and the per-simulation comparison grid (D17–D19). |
 | 2.1 | 2026-11-08 | Terminology only, no behaviour change: "session" renamed to "simulation" everywhere, including identifiers and CSV columns (`simulations`, `displayedSimulations`, `simulationSeed`, `StrategySimulationResult`, `simulation_id`, `simulation_seed`). Results schema stays at version 1 because nothing had been exported yet. |
 | 2.2 | 2026-11-08 | Phase 3 pins, agreed with the project owner (plan items P1–P6). **Generator and shoe:** splitmix32 constants, the unbiased bounded-integer method, test vectors, the fixed shoe order and in-place reshuffles (8.2, 8.3). **Basic strategy:** the solver method — exact card removal, peek-conditioned dealer, two-card-weighted total cells, the split approximation and run-time caching (6.1). **Play:** split dealing order (5.2) and how funds-short decisions are counted (5.4). Results produced before 2.2 are not comparable, because none existed. |
+| 2.3 | 2026-11-08 | Wording only, no change in behaviour. Corrected the note under Oscar's Grind (4.3): the cycle-goal cap holds after a loss or push except when the bet was forced up to the table minimum, which can stay above `needed` through pushes. The overshoot is recorded once, when it is set. Found by the Phase 4 property tests. |

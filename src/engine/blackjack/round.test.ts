@@ -6,7 +6,7 @@ import {
   Outcome,
   type RoundContext,
   createRoundContext,
-  createRoundResult,
+  createRoundSettlement,
   playRound,
 } from './round';
 import { createShoe, createStackedShoe } from './shoe';
@@ -228,7 +228,7 @@ const CASES: Case[] = [
 describe('playRound golden cases (spec 5.6, 7.10)', () => {
   it.each(CASES)('$id: $situation', (testCase) => {
     const shoe = createStackedShoe(testCase.cards);
-    const result = createRoundResult();
+    const result = createRoundSettlement();
     playRound(
       contextFor(testCase.rules),
       shoe,
@@ -253,12 +253,12 @@ describe('playRound guards', () => {
   ])('rejects bet %d with bankroll %d', (bet, bankroll) => {
     const shoe = createStackedShoe([10, 10, 10, 10]);
     expect(() => {
-      playRound(contextFor(), shoe, bet, bankroll, createRoundResult());
+      playRound(contextFor(), shoe, bet, bankroll, createRoundSettlement());
     }).toThrow(RangeError);
   });
 
   it('allows a bet equal to the whole bankroll (D3)', () => {
-    const result = createRoundResult();
+    const result = createRoundSettlement();
     playRound(contextFor(), createStackedShoe([10, 10, 10, 10]), 2000, 2000, result);
     expect(result.netProfit).toBe(0);
   });
@@ -268,7 +268,7 @@ describe('playRound with a real shoe', () => {
   it('reshuffles only before a round, once the cut card is reached', () => {
     const context = contextFor();
     const shoe = createShoe(6, 75, new Rng(123));
-    const result = createRoundResult();
+    const result = createRoundSettlement();
     let reshuffles = 0;
     for (let round = 0; round < 2000; round += 1) {
       const before = shoe.next;
@@ -287,7 +287,7 @@ describe('playRound with a real shoe', () => {
     const run = (): number[] => {
       const context = contextFor();
       const shoe = createShoe(6, 75, new Rng(77));
-      const result = createRoundResult();
+      const result = createRoundSettlement();
       const nets: number[] = [];
       for (let round = 0; round < 500; round += 1) {
         playRound(context, shoe, 2000, 1_000_000, result);
@@ -301,7 +301,7 @@ describe('playRound with a real shoe', () => {
   it('keeps every result an integer, with wagers in whole bets and outcome matching the sign', () => {
     const context = contextFor();
     const shoe = createShoe(6, 75, new Rng(5));
-    const result = createRoundResult();
+    const result = createRoundSettlement();
     for (let round = 0; round < 5000; round += 1) {
       playRound(context, shoe, 2000, 1_000_000, result);
       expect(Number.isSafeInteger(result.netProfit)).toBe(true);
