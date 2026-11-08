@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Spec version | **2.1** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026) |
+| Spec version | **2.2** (2.0 frozen 7 November 2026; 2.1 terminology change 8 November 2026; 2.2 Phase 3 pins 8 November 2026) |
 | Results schema version | 1 |
 | Based on | [Project Plan v2](project-plan-v2.md) |
 | Status | **Frozen** 7 November 2026. Decisions D1–D19 and assumptions A1–A4 confirmed by the project owner. Changes need a version bump and a changelog entry (section 13). |
@@ -249,7 +249,7 @@ A rule option appears in the UI only after its tier passes validation (section 6
 2. Deal player, dealer upcard, player, dealer hole card.
 3. If the dealer upcard is an ace or 10-value card, the dealer peeks. On dealer blackjack the round ends at once: a player natural pushes; otherwise the player loses only the initial bet. No surrender, double or split happens.
 4. If the player has a natural (and the dealer does not): the player is paid at the blackjack payout and the round ends.
-5. Otherwise the player plays each hand by basic strategy (section 6), left to right.
+5. Otherwise the player plays each hand by basic strategy (section 6), left to right. On a split, the hand becomes two hands of one card each, with the new hand placed immediately to the right. The left hand receives its second card at once and is played to completion (including any re-split) before the next hand to the right receives its second card.
 6. If at least one player hand is neither busted nor surrendered, the dealer plays: hits to hard 17+, stands on soft 17 under S17, hits soft 17 under H17.
 7. Settle each hand on its own; net round profit is the sum.
 
@@ -270,7 +270,9 @@ A rule option appears in the UI only after its tier passes validation (section 6
 If basic strategy calls for a double or split and its extra stake (`= that hand's stake` for a double, `= initial bet` for a split) is greater than the available funds:
 
 1. Play the best remaining legal action, defined as the action with the highest expected value among those still legal and affordable. The solver produces these EVs (section 6.1), so no extra chart is needed.
-2. Increment `unavailableActionCount` by 1 for that decision.
+2. Increment `unavailableActionCount` by 1 for that decision. A decision is counted once: if a split is unaffordable, the fallback is chosen only from actions that are both legal and affordable, so an equally unaffordable double is not counted again.
+
+An action that the rules forbid (for example a double after a split without DAS, or a split beyond the maximum number of hands) is not a funds shortage and is never counted. The pair is then played by its total.
 
 Typical results: a hard 11 that cannot be doubled hits; a soft 18 vs 3 that cannot be doubled stands; a pair of 8s that cannot be split is played as hard 16.
 
@@ -318,6 +320,14 @@ Phase 3 turns these into card-exact tests with fixed shoe orders.
 - It is generated per rule set by an exact expected-value solver for the configured deck count, S17/H17, DAS, doubling rule, surrender, split limits and split-ace rule, with dealer peek.
 - For each cell the solver stores the EV of every legal action (stand, hit, double, split, surrender), so the funds-short fallback (5.4) is "best affordable action by EV".
 - Tables are cached by a canonical rule-set key. A table generated for one rule set is never reused for another.
+
+**Solver method (pinned in 2.2).**
+
+- *Card removal.* EVs are exact for the finite shoe minus the dealer upcard and every card in the player's hand so far, recalculated after each further card. The dealer's final-total probabilities are conditioned on the peek: with an ace up the hole card is not a ten-value card, and with a ten-value card up it is not an ace.
+- *Total cells.* A cell's EV for stand, hit and double is the average over every two-card hand that makes that total (pairs included), weighted by its probability from the shoe minus the upcard. Hit EV means hitting and then standing or hitting by exact EV. Totals of 21 are always stood on and have no cell. Hands of three or more cards, and split hands, use the cell for their total; doubling is offered only where the rules allow it.
+- *Pair cells.* The split decision compares the EV of splitting with the best non-split EV of that exact pair. If the pair is not split, it is played by its total cell.
+- *Split EV.* The approximation is fixed and standard. Remove the upcard and both pair cards, and let q be the probability of drawing another pair card. Compute the expected number of finished hands and of hands left as an unsplit pair once the hand limit is reached, holding q fixed. Split EV is (finished hands × average EV of a post-split hand whose second card is not the pair card) + (unsplit hands × EV of the unsplit pair). A post-split hand may double only with DAS. Split aces receive one card and stand.
+- *Where.* Tables are generated at run time and cached in memory per rule-set key. Generation takes about 1.3 s per rule set on a current laptop core.
 
 ### 6.2 Decision rule
 
@@ -523,14 +533,16 @@ Same setup as 7.1 unless stated. Each line is: starting state → outcome(s) →
 ### 8.2 Generator
 
 - PRNG: **xoshiro128\*\***, with its 128-bit state filled by four outputs of **splitmix32** seeded with the simulation seed.
-- Bounded integers in `[0, n)` use an unbiased rejection method. Phase 3 pins the exact method and the first outputs for known seeds as test vectors.
+- splitmix32 (pinned in 2.2): `state = (state + 0x9E3779B9) mod 2^32; z = state; z = (z ^ (z >>> 16)) × 0x21F0AAAD; z = (z ^ (z >>> 15)) × 0x735A2D97; output z ^ (z >>> 15)`, with every multiplication taken mod 2^32. The xoshiro128\*\* state is `s0..s3` = its first four outputs, in order.
+- Bounded integers in `[0, n)` (pinned in 2.2): `t = (2^32 − n) mod n`; draw `r` until `r ≥ t`; return `r mod n`. This is exactly unbiased.
+- Test vectors (pinned in 2.2): the first four `nextUint32` outputs are `1789933344, 44971166, 2521387044, 3848737593` for seed 0, and `660444221, 3652823732, 77672526, 910233633` for seed 42.
 - Changing the generator, seeding or shuffle changes every result. That requires a spec version bump.
 
 ### 8.3 Shoe
 
-- The shoe is built in a fixed card order (pinned in Phase 3), then shuffled by Fisher–Yates from the last index down.
+- The shoe is built in a fixed card order, then shuffled by Fisher–Yates from the last index down. Pinned in 2.2: the order is deck by deck, ranks A, 2, …, 10, J, Q, K, with four cards of each rank. Cards are stored by blackjack value, so J, Q and K are 10. Each step `i` from `n − 1` down to `1` swaps index `i` with `j = nextBelow(i + 1)`. With seed 0 and 6 decks, the first ten cards after the first shuffle are `10, 4, 3, 4, 9, 2, 2, 10, 5, 10`.
 - Cut card position = `floor(totalCards × penetration)`.
-- The reshuffle check happens **only before a round**: if cards dealt ≥ cut card position, the whole shoe is reshuffled with the same RNG stream. A round never reshuffles in the middle. There is no burn card.
+- The reshuffle check happens **only before a round**: if cards dealt ≥ cut card position, the whole shoe is reshuffled with the same RNG stream. A round never reshuffles in the middle. There is no burn card. The shoe is shuffled once when it is created. A reshuffle shuffles the current card array in place; it does not restore the fixed order first.
 
 ### 8.4 Determinism contract
 
@@ -543,7 +555,7 @@ The same configuration and experiment seed always give identical per-simulation 
 ```ts
 interface ExperimentConfig {
   schemaVersion: 1;
-  specVersion: "2.1";
+  specVersion: "2.2";
   experimentId: string;              // created in the UI
   experimentSeed: number;            // uint32
   simulations: number;                  // 1 .. 50_000 (soft cap, final value from Phase 9)
@@ -741,3 +753,4 @@ These close gaps the plan left open. All are confirmed by the project owner (7 N
 | --- | --- | --- |
 | 2.0 | 2026-11-07 | Frozen from Project Plan v2. Added exact definitions, worked examples, schemas and CSV columns. Pre-freeze review added the unique-seed guarantee and the per-simulation comparison grid (D17–D19). |
 | 2.1 | 2026-11-08 | Terminology only, no behaviour change: "session" renamed to "simulation" everywhere, including identifiers and CSV columns (`simulations`, `displayedSimulations`, `simulationSeed`, `StrategySimulationResult`, `simulation_id`, `simulation_seed`). Results schema stays at version 1 because nothing had been exported yet. |
+| 2.2 | 2026-11-08 | Phase 3 pins, agreed with the project owner (plan items P1–P6). **Generator and shoe:** splitmix32 constants, the unbiased bounded-integer method, test vectors, the fixed shoe order and in-place reshuffles (8.2, 8.3). **Basic strategy:** the solver method — exact card removal, peek-conditioned dealer, two-card-weighted total cells, the split approximation and run-time caching (6.1). **Play:** split dealing order (5.2) and how funds-short decisions are counted (5.4). Results produced before 2.2 are not comparable, because none existed. |

@@ -17,7 +17,7 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "bench:houseedge": "node scripts/bench-houseedge.mjs"
+    "bench:houseedge": "vitest run --config vitest.houseedge.config.ts"
   },
   "dependencies": {
     "react": "^19.3.1",
