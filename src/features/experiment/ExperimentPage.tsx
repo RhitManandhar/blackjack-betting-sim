@@ -1,8 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { createDefaultConfig } from '../../shared/defaults';
 import type { ExperimentConfig } from '../../shared/schema';
-import { targetAmount } from '../../shared/targets';
-import { ResultsTable } from '../results/ResultsTable';
 import { createExperimentIdentity } from './createExperimentIdentity';
 import { browserWorkerFactory, logicalCores } from './run/browserWorker';
 import { ConfigFileControls } from './ConfigFileControls';
@@ -30,24 +28,16 @@ import {
 } from './SetupSections';
 import { estimateWork } from './workEstimate';
 
-// Setup screen (plan 8.1), run controls and results. The live screen and the full dashboard
-// arrive in Phase 8b; exports in 8c.
+// Setup screen (plan 8.1), run controls, the live screen (8.2) and the final dashboard (8.3).
+// Exports arrive in Phase 8c.
 
 const numberFormat = new Intl.NumberFormat('en-AU');
 
-// ECharts is most of the page weight, so the chart loads only once a run starts.
-const SimulationPanel = lazy(async () => {
-  const module = await import('../results/SimulationPanel');
-  return { default: module.SimulationPanel };
+// ECharts is most of the page weight, so the results view loads only once a run starts.
+const ResultsView = lazy(async () => {
+  const module = await import('../results/ResultsView');
+  return { default: module.ResultsView };
 });
-
-function targetBankrollFor(config: ExperimentConfig): number | null {
-  if (config.targetMode === 'none') return null;
-  const target = config.targetMode === 'single' ? config.singleTarget : '2_5x';
-  return target === null
-    ? null
-    : config.startingBankroll + targetAmount(config.startingBankroll, target);
-}
 
 export function ExperimentPage() {
   const [base] = useState(() => {
@@ -186,23 +176,10 @@ export function ExperimentPage() {
             }}
           />
           <Suspense
-            fallback={<p className="text-sm text-slate-500 dark:text-slate-400">Loading chart…</p>}
+            fallback={<p className="text-sm text-slate-500 dark:text-slate-400">Loading charts…</p>}
           >
-            <SimulationPanel
-              simulationNumber={1}
-              results={snapshot.displayed[0] ?? null}
-              startingBankroll={runConfig.startingBankroll}
-              targetBankroll={targetBankrollFor(runConfig)}
-              runEnded={!running}
-            />
+            <ResultsView snapshot={snapshot} config={runConfig} />
           </Suspense>
-          {snapshot.summary !== null && (
-            <ResultsTable
-              summary={snapshot.summary}
-              status={snapshot.status}
-              totalSimulations={snapshot.totalSimulations}
-            />
-          )}
         </>
       )}
 

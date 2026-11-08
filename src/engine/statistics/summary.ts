@@ -35,12 +35,30 @@ export interface CheckpointSummary {
   readonly meanProfit: number;
   readonly profitableShare: number;
   readonly worstProfit: number;
+  readonly meanProfitInterval: Interval | null;
   /** From the fixed-bin histogram; label as approximate (spec 10.3). */
   readonly approximate: {
     readonly p5: number;
+    readonly p25: number;
     readonly median: number;
+    readonly p75: number;
     readonly p95: number;
   };
+  /** Bet progression (spec 2.7): bets placed in this round by strategies still playing. */
+  readonly bets: {
+    readonly stillPlaying: number;
+    readonly stillPlayingShare: number;
+    readonly meanBet: number | null;
+    readonly p95Bet: number | null;
+  };
+}
+
+export interface PercentileSet {
+  readonly p5: number;
+  readonly p25: number;
+  readonly median: number;
+  readonly p75: number;
+  readonly p95: number;
 }
 
 export interface StrategySummary {
@@ -52,6 +70,9 @@ export interface StrategySummary {
   readonly profitShare: number;
   readonly profitShareInterval: Interval;
   readonly breakEvenShare: number;
+  /** Goal 2 (spec 2.7): share ending at or above break-even, with its Wilson interval. */
+  readonly atLeastBreakEvenShare: number;
+  readonly atLeastBreakEvenInterval: Interval;
   readonly lossShare: number;
   readonly profitMean: number;
   readonly profitMeanInterval: Interval | null;
@@ -75,6 +96,7 @@ export interface StrategySummary {
   readonly averageRoundsPlayed: number;
   readonly maxDrawdown: number;
   readonly averageMaxDrawdown: number;
+  readonly maxDrawdownPercentiles: PercentileSet;
   readonly targets: readonly TargetSummary[];
   readonly bustRate: number;
   readonly blockRate: number;
@@ -179,6 +201,8 @@ function summarizeStrategy(
     statusCounts,
     profitShare: profitable / n,
     profitShareInterval: wilsonInterval(profitable, n),
+    atLeastBreakEvenShare: (profitable + breakEven) / n,
+    atLeastBreakEvenInterval: wilsonInterval(profitable + breakEven, n),
     breakEvenShare: breakEven / n,
     lossShare: (n - profitable - breakEven) / n,
     profitMean,
@@ -208,6 +232,7 @@ function summarizeStrategy(
     maxWager: maxOf(columns.maxWager, simulations),
     averageRoundsPlayed: totalRounds / n,
     maxDrawdown: maxOf(columns.maxDrawdown, simulations),
+    maxDrawdownPercentiles: percentileSet(sortedValues(columns.maxDrawdown, simulations)),
     averageMaxDrawdown: exactSum(columns.maxDrawdown, simulations) / n,
     targets: TARGET_IDS.map((target) => summarizeTarget(target, columns, simulations)),
     bustRate: statusCounts.bust / n,
@@ -228,12 +253,52 @@ function summarizeStrategy(
       profitableShare:
         aggregate.moments.count > 0 ? aggregate.profitable / aggregate.moments.count : 0,
       worstProfit: aggregate.minimum,
+      meanProfitInterval: checkpointMeanInterval(aggregate.moments),
       approximate: {
         p5: aggregate.approximatePercentile(0.05) ?? 0,
+        p25: aggregate.approximatePercentile(0.25) ?? 0,
         median: aggregate.approximatePercentile(0.5) ?? 0,
+        p75: aggregate.approximatePercentile(0.75) ?? 0,
         p95: aggregate.approximatePercentile(0.95) ?? 0,
       },
+      bets: summarizeCheckpointBets(columns.checkpointBets[index], simulations),
     })),
+  };
+}
+
+function percentileSet(sorted: Float64Array): PercentileSet {
+  return {
+    p5: percentileType7(sorted, 0.05),
+    p25: percentileType7(sorted, 0.25),
+    median: percentileType7(sorted, 0.5),
+    p75: percentileType7(sorted, 0.75),
+    p95: percentileType7(sorted, 0.95),
+  };
+}
+
+function checkpointMeanInterval(moments: IntegerMoments): Interval | null {
+  const mean = moments.mean();
+  const sd = moments.sampleSd();
+  return mean === null || sd === null ? null : meanInterval(mean, sd, moments.count);
+}
+
+/** Spec 2.7: exact mean and 95th percentile of the bets placed by strategies still playing. */
+function summarizeCheckpointBets(
+  column: Float64Array | undefined,
+  simulations: readonly number[],
+): CheckpointSummary['bets'] {
+  const bets: number[] = [];
+  for (const simulation of simulations) {
+    const bet = column?.[simulation] ?? Number.NaN;
+    if (!Number.isNaN(bet)) bets.push(bet);
+  }
+  const sorted = Float64Array.from(bets).sort();
+  const total = bets.reduce((sum, bet) => sum + bet, 0);
+  return {
+    stillPlaying: bets.length,
+    stillPlayingShare: simulations.length > 0 ? bets.length / simulations.length : 0,
+    meanBet: bets.length > 0 ? total / bets.length : null,
+    p95Bet: bets.length > 0 ? percentileType7(sorted, 0.95) : null,
   };
 }
 

@@ -60,6 +60,11 @@ export interface RunSnapshot {
   readonly displayed: readonly (readonly StrategySimulationResult[] | null)[];
   /** Present once the run has ended (complete, cancelled or failed). */
   readonly summary: ExperimentSummary | null;
+  /**
+   * The live result table (finished simulations only), for dashboards and exports. It is the
+   * controller's own object, read on the main thread; never mutate it.
+   */
+  readonly results: ExperimentResults;
   readonly error: string | null;
 }
 
@@ -391,6 +396,7 @@ export class RunController {
       }),
       displayed: [...run.displayed],
       summary: run.summary,
+      results: run.results,
       error: run.error,
     });
   }

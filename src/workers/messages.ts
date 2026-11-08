@@ -66,6 +66,7 @@ export const strategySimulationResultSchema = z
     minimumOvershootCount: count,
     minimumOvershootTotal: count,
     checkpointProfit: z.array(cents).readonly(),
+    checkpointBet: z.array(count.nullable()).readonly(),
     curve: z
       .strictObject({
         rounds: z.array(count),

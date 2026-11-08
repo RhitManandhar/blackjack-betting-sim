@@ -1,4 +1,4 @@
-import { LineChart } from 'echarts/charts';
+import { BarChart, BoxplotChart, LineChart } from 'echarts/charts';
 import {
   DataZoomComponent,
   GridComponent,
@@ -16,6 +16,8 @@ import { useEffect, useRef } from 'react';
 
 registerChartParts([
   LineChart,
+  BarChart,
+  BoxplotChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
@@ -25,7 +27,8 @@ registerChartParts([
 ]);
 
 interface EChartProps {
-  readonly option: EChartsCoreOption;
+  /** Plain JSON options from the builders in ./charts. */
+  readonly option: Record<string, unknown>;
   readonly height: number;
   readonly ariaLabel: string;
 }
@@ -51,7 +54,7 @@ export function EChart({ option, height, ariaLabel }: EChartProps) {
   }, []);
 
   useEffect(() => {
-    chartRef.current?.setOption(option, { notMerge: true });
+    chartRef.current?.setOption(option as EChartsCoreOption, { notMerge: true });
   }, [option]);
 
   return <div ref={containerRef} role="img" aria-label={ariaLabel} style={{ height }} />;
