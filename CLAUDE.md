@@ -14,7 +14,8 @@ Claude Code loads this file automatically from the repository root. It holds the
 - Phase 4 (betting strategies): **done** 2026-11-08, merged to `main` (PR #3). Spec v2.3 corrected an Oscar's Grind note.
 - Phase 5 (simulation runner and statistics): **done** 2026-11-08, merged to `main` (PR #4). Spec v2.4 pins the checkpoint histogram layout and the curve-point bet field. Runner throughput is about 1.23 µs per round.
 - Phase 6 (worker pool and end-to-end slice): **done** 2026-11-08, merged to `main` (PR #5) and live. Spec v2.5 adds the `failed` run status. Only simulation 1's panel is drawn; the n-panel grid is deferred to Phase 8. Run always starts a fresh experiment.
-- Phase 7 (rules Tier 2 and Tier 3): **done** 2026-11-08 on branch `phase-7-rules`; not yet merged. Spec v2.6. Both gates pass for every option; two borderline chart cells are agreed, pinned exceptions (`docs/validation.md`). The rule controls are on the run screen.
+- Phase 7 (rules Tier 2 and Tier 3): **done** 2026-11-08, merged to `main` (PR #6). Spec v2.6. Both gates pass for every option; two pinned chart exceptions (`docs/validation.md`).
+- Phase 8 (dashboards and reports): **in progress** in three slices: 8a setup screen (done on branch `phase-8a-setup`, not yet merged), 8b live screen and dashboard, 8c exports. Agreed 2026-11-08: goal rankings (spec v2.7); bet progression from per-checkpoint bets across all simulations; keep the last 10 experiment summaries in browser storage.
 - Known: `npm audit` reports a moderate `minimatch` advisory inside ESLint tooling only (dev dependency; `npm audit --omit=dev` is clean). The only fix downgrades ESLint 10 to 9, so it is deliberately left. Recheck when ESLint updates.
 
 Update this section at the end of each phase.

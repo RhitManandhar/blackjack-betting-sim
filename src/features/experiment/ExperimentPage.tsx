@@ -5,18 +5,33 @@ import { targetAmount } from '../../shared/targets';
 import { ResultsTable } from '../results/ResultsTable';
 import { createExperimentIdentity } from './createExperimentIdentity';
 import { browserWorkerFactory, logicalCores } from './run/browserWorker';
+import { ConfigFileControls } from './ConfigFileControls';
+import { RecentExperimentsPanel } from './RecentExperimentsPanel';
+import {
+  type RecentExperiment,
+  browserStorage,
+  clearRecent,
+  digestOf,
+  loadRecent,
+  saveRecent,
+} from './recentExperiments';
 import { RunController, type RunSnapshot } from './run/RunController';
 import { estimateRuntimeSeconds, resolveWorkerCount } from './run/runPlanning';
-import { RunForm } from './RunForm';
 import { RulesForm } from './RulesForm';
 import { RunProgress } from './RunProgress';
 import { buildConfig, draftFromConfig } from './runFormConfig';
 import { SettingRow, SettingsSection } from './SettingsSection';
-import { SettingsOverview } from './SettingsOverview';
+import {
+  BankrollSection,
+  CheckpointsSection,
+  SimulationSizeSection,
+  StopConditionsSection,
+  StrategiesSection,
+} from './SetupSections';
 import { estimateWork } from './workEstimate';
 
-// Phase 6 end-to-end slice: a few inputs, Run, live progress with Stop All, one chart
-// (simulation 1's comparison panel) and a results table.
+// Setup screen (plan 8.1), run controls and results. The live screen and the full dashboard
+// arrive in Phase 8b; exports in 8c.
 
 const numberFormat = new Intl.NumberFormat('en-AU');
 
@@ -43,6 +58,8 @@ export function ExperimentPage() {
   const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
   const [runConfig, setRunConfig] = useState<ExperimentConfig | null>(null);
   const controllerRef = useRef<RunController | null>(null);
+  const [recent, setRecent] = useState<RecentExperiment[]>(() => loadRecent(browserStorage()));
+  const savedRuns = useRef(new Set<string>());
 
   useEffect(() => {
     const controller = new RunController({
@@ -56,7 +73,23 @@ export function ExperimentPage() {
     };
   }, []);
 
+  // Save each finished run's digest once (plan 8.4).
+  useEffect(() => {
+    if (snapshot === null || runConfig === null || snapshot.status === 'running') return;
+    if (snapshot.summary === null || savedRuns.current.has(snapshot.runId)) return;
+    savedRuns.current.add(snapshot.runId);
+    const entry = digestOf(
+      runConfig,
+      snapshot.status,
+      snapshot.completedSimulations,
+      snapshot.summary.strategies,
+      Date.now(),
+    );
+    setRecent(saveRecent(browserStorage(), entry));
+  }, [snapshot, runConfig]);
+
   const built = useMemo(() => buildConfig(draft, base), [draft, base]);
+  const errors = built.ok ? {} : built.errors;
   const running = snapshot?.status === 'running';
   const workers = resolveWorkerCount(draft.workerCount, logicalCores());
   const autoWorkers = resolveWorkerCount('auto', logicalCores());
@@ -71,24 +104,28 @@ export function ExperimentPage() {
 
   return (
     <div className="space-y-4">
-      <RunForm
-        draft={draft}
-        errors={built.ok ? {} : built.errors}
-        disabled={running}
-        autoWorkers={autoWorkers}
-        onChange={setDraft}
-        onNewSeed={() => {
-          setDraft({ ...draft, seed: String(createExperimentIdentity().experimentSeed) });
-        }}
-      />
-
-      <RulesForm
-        rules={draft.rules}
-        disabled={running}
-        onChange={(rules) => {
-          setDraft({ ...draft, rules });
-        }}
-      />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SimulationSizeSection
+          draft={draft}
+          errors={errors}
+          onChange={setDraft}
+          autoWorkers={autoWorkers}
+          onNewSeed={() => {
+            setDraft({ ...draft, seed: String(createExperimentIdentity().experimentSeed) });
+          }}
+        />
+        <BankrollSection draft={draft} errors={errors} onChange={setDraft} />
+        <StopConditionsSection draft={draft} errors={errors} onChange={setDraft} />
+        <StrategiesSection draft={draft} errors={errors} onChange={setDraft} />
+        <CheckpointsSection draft={draft} errors={errors} onChange={setDraft} />
+        <RulesForm
+          rules={draft.rules}
+          disabled={running}
+          onChange={(rules) => {
+            setDraft({ ...draft, rules });
+          }}
+        />
+      </div>
 
       <SettingsSection title="Pre-run summary">
         {built.ok ? (
@@ -121,6 +158,15 @@ export function ExperimentPage() {
             {built.errors.form ?? 'Fix the highlighted settings to run.'}
           </p>
         )}
+        <div className="mt-4">
+          <ConfigFileControls
+            config={built.ok ? built.config : null}
+            disabled={running}
+            onImport={(config) => {
+              setDraft(draftFromConfig(config));
+            }}
+          />
+        </div>
         <button
           type="button"
           onClick={start}
@@ -160,7 +206,18 @@ export function ExperimentPage() {
         </>
       )}
 
-      <SettingsOverview config={built.ok ? built.config : base} />
+      <RecentExperimentsPanel
+        entries={recent}
+        disabled={running}
+        onReuse={(config) => {
+          setDraft(draftFromConfig(config));
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onClear={() => {
+          clearRecent(browserStorage());
+          setRecent([]);
+        }}
+      />
     </div>
   );
 }
