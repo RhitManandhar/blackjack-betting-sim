@@ -11,6 +11,7 @@
     "vite.config.ts",
     "vitest.houseedge.config.ts",
     "vitest.perf.config.ts",
+    "vitest.crosscheck.config.ts",
     "eslint.config.js",
     "eslint/**/*",
     "scripts/**/*"

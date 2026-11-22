@@ -19,7 +19,8 @@
     "format:check": "prettier --check .",
     "bench:houseedge": "vitest run --config vitest.houseedge.config.ts",
     "bench:perf": "vite build -c scripts/perf/vite.worker.config.ts && vitest run --config vitest.perf.config.ts",
-    "bench:perf:quick": "PERF_GRID=quick npm run bench:perf"
+    "bench:perf:quick": "PERF_GRID=quick npm run bench:perf",
+    "bench:crosscheck": "vitest run --config vitest.crosscheck.config.ts"
   },
   "dependencies": {
     "echarts": "^6.1.0",

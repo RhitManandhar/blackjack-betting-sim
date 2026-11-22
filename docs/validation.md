@@ -1,4 +1,4 @@
-# Validation — basic strategy and house edge
+# Validation — basic strategy, house edge and cross-checks
 
 Correctness gates from spec section 6.3. A rule option appears in the UI only after it passes both gates. This file records the reference sources, the method and every gate result.
 
@@ -142,3 +142,81 @@ Unavailable actions: 0 in every run. SD per round: 1.13–1.16 bets for 3:2 and 
 - **The 6-deck option sets** sit 0.02–0.04% above their published values. That is the same offset as the 6-deck baseline in the Tier 1 results above (+0.0332%). So each option's effect relative to the baseline closely matches the published effect; for example, surrender is published as −0.073% and measured as −0.068%.
 - **Closest to the limit:** two rule sets landed near the edge of their interval, surrender and doubling on 9–11, both at +0.0376% against a ±0.041% half-width. The 6-deck offset is worth confirming with a longer run (200M rounds halves the interval).
 - **Penetration:** 50% and 90% gave 0.4453% and 0.4471%, indistinguishable at this sample size. The cut-card effect varies with penetration, but the variation is smaller than the gate can resolve. Both lie within the interval of the 75% published value.
+
+## Cross-checks (Phase 9, task 4)
+
+Independent checks of the whole simulator, beyond the two gates. Run with `npm run bench:crosscheck` (about 1 minute on 10 cores; never in CI). Code in `scripts/cross-check/`. `CROSS_CHECK_SIMULATIONS` (default 20,000) and `CROSS_CHECK_ROUNDS` (default 20,000,000) change the sizes. Seed 20261122.
+
+### Cross-check 1 — return per base bet
+
+**Claim checked.** No betting system changes the house edge. For every strategy, the return per unit of initial bet must match the published edge of the default rules (6 decks, S17, DAS, 3:2, 0.4262%; see gate 2).
+
+**Method.**
+
+- Each strategy plays alone through the real runner (`createSimulationPlan` + `runSimulation`) on the default configuration: 20,000 simulations of 1,000 rounds, no target.
+- One change: the bankroll is unlimited (10^15 cents, far above the form's limit; the plan is built directly). Nothing busts, and basic strategy is never cut short by an unaffordable double or split.
+- A counting wrapper around the real round source records every round. For every simulation, its totals must equal the runner's `roundsPlayed`, `netProfit` and `sumInitialBets`, and final bankroll must equal starting bankroll plus net profit.
+- Two estimates, each with a 99% interval clustered by simulation (delta method; rounds within a simulation share a shoe):
+  - **Bet-weighted return:** total profit ÷ total initial bets, the house-edge definition. This is where strategies differ.
+  - **Per-bet return:** the mean of net ÷ initial bet per round. Each strategy has its own shoe from the same seed, so with an unlimited bankroll the cards and decisions are the same whatever the bet. This figure is therefore identical for every strategy and equal to flat betting's. It shows that bet size never changes play.
+- **Pass:** both intervals contain 0.4262%, no unavailable actions, no bookkeeping mismatches.
+- **Martingale needs a table maximum to be checked.** Without a bankroll or table limit, a Martingale bet after k losses is 2^k units while such a streak has a probability of about 0.53^k, so the variance of its bet total is unbounded and no interval for the ratio is reliable (at 200, 2,000 and 20,000 simulations the 99% half-width was ±4.8%, ±10.4% and ±2.6%). Its gated run therefore uses a table maximum of 1,024 units (20,480.00): it stops as `blocked_table_max` after ten straight losses, so bets stay bounded, and stopping cannot change the expected return per unit bet. The run without a maximum is reported only.
+- A last pass at the default 500.00 bankroll, exactly as a user runs it, is reported only. Busts stop strategies early, and unaffordable doubles and splits are played as the best remaining action (spec 6.2).
+
+### Results, 2026-11-22 (spec 2.9, seed 20261122): pass, 5 of 5 strategies
+
+Unlimited bankroll, 20,000 simulations each. "Edge" is minus the return per unit of initial bet; the published value is 0.4262%.
+
+| Strategy | Rounds | Bet-weighted edge | 99% half-width | Difference | Per-bet edge |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `flat-v1` | 20,000,000 | 0.4162% | ±0.0664% | −0.0100% | 0.4162% ± 0.0664% |
+| `martingale-v1` (table max 1,024 units) | 16,897,741 | 0.2221% | ±0.4158% | −0.2041% | 0.4100% ± 0.0722% |
+| `paroli-classic-v1` | 20,000,000 | 0.4192% | ±0.0772% | −0.0070% | 0.4162% ± 0.0664% |
+| `paroli-1326-v1` | 20,000,000 | 0.4274% | ±0.0809% | +0.0012% | 0.4162% ± 0.0664% |
+| `oscars-grind-bj-v1` | 20,000,000 | 0.4063% | ±0.1904% | −0.0199% | 0.4162% ± 0.0664% |
+
+Unavailable actions: 0. Bookkeeping mismatches: 0. Martingale stops: 14,094 round limit, 5,906 blocked at the table maximum.
+
+**Reported only.**
+
+| Run | Rounds | Unavailable actions | Bet-weighted edge |
+| --- | ---: | ---: | --- |
+| `martingale-v1`, unlimited bankroll, no table maximum | 20,000,000 | 0 | −1.1884% ± 2.6483% (interval not reliable, see above) |
+| `flat-v1`, default 500.00 bankroll | 13,614,388 | 2,699 | 0.4093% ± 0.0805% |
+| `martingale-v1`, default 500.00 bankroll | 1,384,800 | 2,361 | 0.4352% ± 0.5693% |
+| `paroli-classic-v1`, default 500.00 bankroll | 8,599,484 | 6,701 | 0.4328% ± 0.1180% |
+| `paroli-1326-v1`, default 500.00 bankroll | 7,245,730 | 6,047 | 0.4400% ± 0.1342% |
+| `oscars-grind-bj-v1`, default 500.00 bankroll | 4,572,650 | 4,663 | 0.3993% ± 0.2069% |
+
+At the default bankroll every strategy's interval also contains the published edge. The extra cost of the unaffordable doubles and splits is too small to see at this sample size.
+
+### Cross-check 2 — outcome frequencies
+
+**Reference.** Michael Shackleford, "Variance in Blackjack: Standard Deviation & Multiple Hands", Wizard of Odds, <https://wizardofodds.com/games/blackjack/appendix/4/> (last updated 3 August 2026, retrieved 22 November 2026). Its table of net-win probabilities for one hand assumes basic strategy in a cut-card game under the page's "liberal Strip rules": 6 decks, S17, double on any two cards, DAS, late surrender, re-split aces, up to four hands. The page does not state its penetration; the check uses the engine's 75% default. Values are copied into `scripts/cross-check/publishedOutcomes.ts`.
+
+**Method.** Flat betting at 20.00, unlimited bankroll, 20,000,000 rounds in simulations of 100,000 rounds, as in gate 2.
+
+- **The spec's four categories** (spec 1: blackjack, win, push, loss) come from the table. With these rules +1.5 occurs only for an unsplit natural, and surrender (−0.5) is a loss. Each passes when the published share lies within the simulated share ± 2.5758 standard errors (99%).
+- **Every table row with probability ≥ 0.0005** (11 rows, covering surrender, doubles and splits) passes at |z| ≤ 3.5, about 99% for the family. Smaller rows are reported only.
+- No simulated net result may fall outside the table's values.
+
+### Results, 2026-11-22 (spec 2.9, seed 20261122): pass
+
+| Category | Simulated | 99% half-width | Published | Difference |
+| --- | ---: | ---: | ---: | ---: |
+| Blackjack | 4.5315% | ±0.0120% | 4.5296% | +0.0018% |
+| Win | 37.9207% | ±0.0279% | 37.8971% | +0.0235% |
+| Push | 8.4852% | ±0.0160% | 8.4833% | +0.0019% |
+| Loss | 49.0627% | ±0.0288% | 49.0900% | −0.0273% |
+
+| Net (bets) | −3 | −2 | −1 | −0.5 | 0 | +1 | +1.5 | +2 | +3 | +4 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| z | 1.11 | 0.75 | −2.46 | −1.10 | 0.30 | 0.80 | 0.40 | **3.19** | −1.20 | 0.18 |
+
+(The −4 row, 0.00048, is just below the gating threshold: z 0.40.) Net results outside the table: none. Unavailable actions: 0.
+
+**Observations.**
+
+- Win and loss sit close to their limits: win at +0.0235% against ±0.0279%, loss at −0.0273% against ±0.0288%. Most of the shift is in the +2 row (z 3.19; doubles won), with the −1 row correspondingly lower (z −2.46).
+- The mean result per bet, reported only, is −0.2196% (SE about 0.026%). The table's own expectation is −0.2773%, about 2.2 standard errors away.
+- So the simulation wins slightly more doubles than the table, while the categories and every other row agree. The reference does not say whether its strategy is total-dependent like ours or composition-dependent, or what its penetration is; either could move doubled hands by this much. This does not fail the check, but it is worth revisiting with a longer run (`CROSS_CHECK_ROUNDS=100000000`) before treating it as a real difference.
