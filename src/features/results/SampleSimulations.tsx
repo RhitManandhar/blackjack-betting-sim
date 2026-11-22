@@ -36,7 +36,7 @@ export function SampleSimulations({
         <label className="text-sm">
           Strategy{' '}
           <select
-            className="rounded-md border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-950"
+            className="rounded-md border border-slate-500 bg-white px-2 py-1 dark:border-slate-500 dark:bg-slate-950"
             value={strategyId}
             onChange={(event) => {
               const next = results.shape.strategies.find(

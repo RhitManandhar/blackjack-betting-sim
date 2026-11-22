@@ -12,7 +12,7 @@ import { SettingsSection } from './SettingsSection';
 // Dealer peek and insurance are fixed and shown in the settings overview.
 
 const selectClass =
-  'mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950 disabled:opacity-60';
+  'mt-1 w-full rounded-md border border-slate-500 bg-white px-2 py-1.5 text-sm dark:border-slate-500 dark:bg-slate-950 disabled:opacity-60';
 
 interface RulesFormProps {
   readonly rules: RuleSet;

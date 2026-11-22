@@ -56,7 +56,10 @@ export function RunProgress({ snapshot, onStop }: RunProgressProps) {
         aria-valuenow={snapshot.completedSimulations}
         className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
       >
-        <div className="h-full bg-teal-600" style={{ width: `${String(fraction * 100)}%` }} />
+        <div
+          className="h-full bg-teal-700 dark:bg-teal-600"
+          style={{ width: `${String(fraction * 100)}%` }}
+        />
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">

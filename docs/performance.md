@@ -94,9 +94,36 @@ Safari does not report memory.
 | Default run completes; the live screen updates smoothly | | | | |
 | Stop All during a 50,000-simulation run stops within about a second; a fresh run then starts and completes | | | | |
 | The memory check on `/?benchmark` shows no growth over 6 runs (Chrome and Edge report memory) | | | | |
-| Keyboard only: setup, Run, Stop All, grid enlarge and close, rankings tabs, table sorting, downloads | | | | |
+| Keyboard only: setup, Run, Stop All, grid enlarge and close (Esc), rankings tabs (arrow keys, Home, End), table sorting, downloads, large-file confirmation (Esc) | | | | |
+| Focus is always visible, and returns to the opening button after the grid dialog or the large-file confirmation closes | | | | |
 | Phone width (about 375 px): no horizontal page scroll; charts and tables readable | | | | |
+| Browser zoom at 200%: nothing cut off or overlapping | | | | |
+| Screen reader (VoiceOver in Safari, or NVDA in Firefox or Edge): field errors, run status and download messages are announced; the tabs and dialogs are named | | | | |
 | HTML report opens offline with tooltips, toggles and zoom | | | | |
+
+## Accessibility review (plan Phase 9, task 5) — 2026-11-22
+
+**Lint.** `eslint-plugin-jsx-a11y` 6.10.2 runs at its `strict` level on every component. Its peer range stops at ESLint 9, so `package.json` has an `overrides` entry that lets it use the project's ESLint 10. A deliberately faulty component proved the rules fire under ESLint 10, and `eslint/a11y.test.ts` fails if the rules are ever switched off. The app passed with no findings; the plugin then caught two problems in the 9d changes themselves, and both were fixed. The plugin adds no new `npm audit` findings (the known `minimatch` advisory in ESLint tooling only).
+
+**Hand review and fixes.**
+
+- **Ranking tabs** followed the tab roles but not the keyboard pattern. They now use one Tab stop for the list (roving `tabindex`), Left and Right arrows with wrap-around, and Home and End (`tabKeys.ts`, tested). Each tab names its panel with `aria-controls`, and the panel is labelled by the selected tab.
+- **Enlarged-simulation dialog.** The native modal dialog already traps focus, closes on Esc and returns focus to the panel that opened it. It now takes its name from its heading.
+- **Large-file confirmation** (an inline `alertdialog`) did not take focus, so keyboard and screen-reader users could miss it. Focus now moves to "Build it anyway" when it opens. Esc cancels. Focus returns to the per-simulation button after it closes, whether the export was cancelled or finished. Its text is linked with `aria-describedby`.
+- **Contrast** was measured from Tailwind 4's colour values (WCAG 2.x formula).
+  - Every text pairing in both themes is at least 4.55:1.
+  - Two non-text items were below the 3:1 that WCAG 1.4.11 asks for, and both were fixed:
+    - Input and select borders were 1.48:1 in light mode and 1.7–2.0:1 in dark mode. They now use slate-500: 4.55–4.77:1 light, 3.74–4.23:1 dark.
+    - The light-mode progress bar fill was 2.97:1 against its track. It is now 4.38:1.
+  - Button borders were left as they are, because their text identifies them.
+  - Strategy series colours were validated in Phase 8. Every chart also has labels or a table.
+- **Already in place:**
+  - The page declares its language and has a single `h1` with `header` and `main` landmarks.
+  - Every field has a label, with its error and hint linked.
+  - Errors use `role="alert"`, and status messages use polite live regions.
+  - The progress bar has its own values.
+  - Charts are images with descriptive labels, backed by the comparison table.
+  - The default focus outline is never removed.
 
 ## Final limits (spec 2.9)
 
