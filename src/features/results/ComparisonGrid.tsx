@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { StrategySimulationResult } from '../../engine/simulation/runSimulation';
 import { STRATEGIES } from '../../shared/strategies';
 import { STOP_LABELS } from './charts/panelChart';
@@ -25,6 +25,7 @@ export function ComparisonGrid({
 }: ComparisonGridProps) {
   const [enlarged, setEnlarged] = useState<number | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   const dark = usePrefersDark();
   const strategies = displayed.find((entry) => entry !== null) ?? null;
 
@@ -95,6 +96,7 @@ export function ComparisonGrid({
 
       <dialog
         ref={dialogRef}
+        aria-labelledby={titleId}
         onClose={() => {
           setEnlarged(null);
         }}
@@ -103,7 +105,7 @@ export function ComparisonGrid({
         {enlarged !== null && enlargedResults !== null && (
           <>
             <div className="flex items-start justify-between gap-4">
-              <h3 className="text-base font-semibold">
+              <h3 id={titleId} className="text-base font-semibold">
                 Simulation {enlarged + 1}
                 <span className="ml-2 text-sm font-normal text-slate-500 dark:text-slate-400">
                   seed {enlargedResults[0]?.simulationSeed}

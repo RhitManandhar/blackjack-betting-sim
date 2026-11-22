@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import type { ExperimentSummary } from '../../engine/statistics/summary';
 import type { ExperimentConfig } from '../../shared/schema';
 import { configFileName, configToJson } from '../experiment/configFile';
@@ -42,10 +42,38 @@ export function ExportPanel({ config, snapshot, status, summary }: ExportPanelPr
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [confirmLarge, setConfirmLarge] = useState(false);
   const cancelRef = useRef(false);
+  // Focus moves into the large-file confirmation when it opens and back to the button that
+  // opened it when it closes, so keyboard and screen-reader users never lose their place.
+  const simulationsButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreFocusRef = useRef(false);
+  const confirmTextId = useId();
   const meta = exportMeta(config, status);
   const rows = simulationCsvRowCount(snapshot.results);
   const estimate = estimateSimulationCsvBytes(snapshot.results, meta);
   const partial = status !== 'complete';
+
+  useEffect(() => {
+    if (confirmLarge) confirmButtonRef.current?.focus();
+  }, [confirmLarge]);
+
+  useEffect(() => {
+    if (busy !== null || !restoreFocusRef.current) return;
+    restoreFocusRef.current = false;
+    simulationsButtonRef.current?.focus();
+  }, [busy]);
+
+  const closeConfirmation = () => {
+    setConfirmLarge(false);
+    simulationsButtonRef.current?.focus();
+  };
+
+  // Focus stays on the confirmation's two buttons while it is open, so Esc is handled there.
+  const cancelOnEscape = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    closeConfirmation();
+  };
 
   const fail = (error: unknown) => {
     setMessage({
@@ -64,6 +92,7 @@ export function ExportPanel({ config, snapshot, status, summary }: ExportPanelPr
   };
 
   const downloadSimulations = async () => {
+    if (confirmLarge) restoreFocusRef.current = true;
     setConfirmLarge(false);
     setBusy('simulations');
     cancelRef.current = false;
@@ -144,6 +173,7 @@ export function ExportPanel({ config, snapshot, status, summary }: ExportPanelPr
           Summary (CSV)
         </button>
         <button
+          ref={simulationsButtonRef}
           type="button"
           className={BUTTON}
           disabled={busy !== null}
@@ -190,23 +220,24 @@ export function ExportPanel({ config, snapshot, status, summary }: ExportPanelPr
         <div
           role="alertdialog"
           aria-label="Large file"
+          aria-describedby={confirmTextId}
           className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200"
         >
-          <p>
+          <p id={confirmTextId}>
             The per-simulation CSV will be about {megabytes(estimate)} ({count.format(rows)} rows).
             It is built in steps so the page stays responsive, but it may take a moment.
           </p>
           <div className="mt-2 flex gap-2">
-            <button type="button" className={BUTTON} onClick={() => void downloadSimulations()}>
-              Build it anyway
-            </button>
             <button
+              ref={confirmButtonRef}
               type="button"
               className={BUTTON}
-              onClick={() => {
-                setConfirmLarge(false);
-              }}
+              onKeyDown={cancelOnEscape}
+              onClick={() => void downloadSimulations()}
             >
+              Build it anyway
+            </button>
+            <button type="button" className={BUTTON} onClick={closeConfirmation}>
               Cancel
             </button>
           </div>

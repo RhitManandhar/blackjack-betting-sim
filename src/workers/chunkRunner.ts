@@ -11,6 +11,11 @@ export const PROGRESS_INTERVAL_MS = 300;
 export interface ChunkOutcome {
   readonly simulations: StrategySimulationResult[][];
   readonly roundsPlayed: number;
+  /**
+   * Milliseconds spent simulating, excluding the one-off plan and strategy-table preparation.
+   * Used only to size later chunks and estimate runtime; never affects results.
+   */
+  readonly computeMs: number;
 }
 
 export type ProgressCallback = (simulationsDone: number, roundsDone: number) => void;
@@ -48,6 +53,7 @@ export class ChunkRunner {
       throw new RangeError('Chunk extends past the last simulation');
     }
     const plan = this.planFor(runId, config);
+    const startedAt = now();
     const simulations: StrategySimulationResult[][] = [];
     let roundsPlayed = 0;
     let lastProgress = now();
@@ -61,6 +67,6 @@ export class ChunkRunner {
         lastProgress = time;
       }
     }
-    return { simulations, roundsPlayed };
+    return { simulations, roundsPlayed, computeMs: Math.max(0, now() - startedAt) };
   }
 }

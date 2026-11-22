@@ -94,6 +94,8 @@ export const chunkResultMessageSchema = z.strictObject({
   /** One entry per simulation, in simulation order; each holds every configured strategy. */
   simulations: z.array(z.array(strategySimulationResultSchema).min(1)),
   roundsPlayed: count,
+  /** Time spent simulating, without table preparation; for chunk sizing only (Phase 9). */
+  computeMs: z.number().nonnegative(),
 });
 
 export const errorMessageSchema = z.strictObject({

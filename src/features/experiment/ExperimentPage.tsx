@@ -13,6 +13,7 @@ import {
   loadRecent,
   saveRecent,
 } from './recentExperiments';
+import { loadRoundCost, saveRoundCost } from './roundCost';
 import { RunController, type RunSnapshot } from './run/RunController';
 import { estimateRuntimeSeconds, resolveWorkerCount } from './run/runPlanning';
 import { RulesForm } from './RulesForm';
@@ -29,7 +30,7 @@ import {
 import { estimateWork } from './workEstimate';
 
 // Setup screen (plan 8.1), run controls, the live screen (8.2) and the final dashboard (8.3).
-// Exports arrive in Phase 8c.
+// Exports are on the final dashboard (Phase 8c).
 
 const numberFormat = new Intl.NumberFormat('en-AU');
 
@@ -38,6 +39,14 @@ const ResultsView = lazy(async () => {
   const module = await import('../results/ResultsView');
   return { default: module.ResultsView };
 });
+
+/** "45 s" or "3 min 20 s": an upper bound, rounded up. */
+function formatDuration(seconds: number): string {
+  const whole = Math.ceil(seconds);
+  return whole < 60
+    ? `${String(whole)} s`
+    : `${String(Math.floor(whole / 60))} min ${String(whole % 60)} s`;
+}
 
 export function ExperimentPage() {
   const [base] = useState(() => {
@@ -50,6 +59,7 @@ export function ExperimentPage() {
   const controllerRef = useRef<RunController | null>(null);
   const [recent, setRecent] = useState<RecentExperiment[]>(() => loadRecent(browserStorage()));
   const savedRuns = useRef(new Set<string>());
+  const [roundCost, setRoundCost] = useState(() => loadRoundCost(browserStorage()));
 
   useEffect(() => {
     const controller = new RunController({
@@ -68,6 +78,9 @@ export function ExperimentPage() {
     if (snapshot === null || runConfig === null || snapshot.status === 'running') return;
     if (snapshot.summary === null || savedRuns.current.has(snapshot.runId)) return;
     savedRuns.current.add(snapshot.runId);
+    setRoundCost(
+      saveRoundCost(browserStorage(), snapshot.measuredRoundMicroseconds, snapshot.roundsPlayed),
+    );
     const entry = digestOf(
       runConfig,
       snapshot.status,
@@ -126,8 +139,12 @@ export function ExperimentPage() {
                 value={`${numberFormat.format(estimateWork(built.config).totalRounds)} rounds`}
               />
               <SettingRow
-                label="Estimated time (upper bound)"
-                value={`up to about ${String(Math.ceil(estimateRuntimeSeconds(built.config, workers)))} s on ${String(workers)} worker(s)`}
+                label={
+                  roundCost === null
+                    ? 'Estimated time (upper bound, cautious default speed)'
+                    : 'Estimated time (upper bound, speed measured on this device)'
+                }
+                value={`up to about ${formatDuration(estimateRuntimeSeconds(built.config, workers, roundCost ?? undefined))} on ${String(workers)} worker(s)`}
               />
             </dl>
             {estimateWork(built.config).isOverBudget && (

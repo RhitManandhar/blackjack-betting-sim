@@ -22,12 +22,15 @@ interface FakeOptions {
   failChunk?: { chunkId: number; times: number; how: 'crash' | 'error-message' | 'garbage' };
   /** These chunks never answer, like a worker stuck in a long computation. */
   hangChunks?: readonly number[];
+  /** Reported compute time for a chunk; defaults to 0 (untimed). */
+  computeMs?: (simulationCount: number, chunkId: number) => number;
 }
 
 function fakeWorkers(options: FakeOptions = {}) {
   let created = 0;
   let terminated = 0;
   let failuresLeft = options.failChunk?.times ?? 0;
+  const chunkSizes: number[] = [];
   const factory: WorkerFactory = (handlers) => {
     created += 1;
     const runner = new ChunkRunner();
@@ -41,6 +44,7 @@ function fakeWorkers(options: FakeOptions = {}) {
           return;
         }
         if (options.hangChunks?.includes(message.chunkId)) return;
+        chunkSizes.push(message.simulationCount);
         setTimeout(() => {
           if (!alive) return;
           const failure = options.failChunk;
@@ -73,6 +77,7 @@ function fakeWorkers(options: FakeOptions = {}) {
               chunkId: message.chunkId,
               simulations: outcome.simulations,
               roundsPlayed: outcome.roundsPlayed,
+              computeMs: options.computeMs?.(message.simulationCount, message.chunkId) ?? 0,
             }),
           );
         }, options.delayMs ?? 0);
@@ -87,6 +92,7 @@ function fakeWorkers(options: FakeOptions = {}) {
   return {
     factory,
     stats: () => ({ created, terminated }),
+    chunkSizes,
   };
 }
 
@@ -96,12 +102,12 @@ interface Harness {
   finished: () => Promise<RunSnapshot>;
 }
 
-function harness(factory: WorkerFactory, chunkSize: number): Harness {
+function harness(factory: WorkerFactory, chunkSize: number | null): Harness {
   const snapshots: RunSnapshot[] = [];
   const waiters: ((snapshot: RunSnapshot) => void)[] = [];
   const controller = new RunController({
     createWorker: factory,
-    chunkSize: () => chunkSize,
+    ...(chunkSize === null ? {} : { chunkSize: () => chunkSize }),
     onSnapshot: (snapshot) => {
       snapshots.push(snapshot);
       if (snapshot.status !== 'running')
@@ -153,6 +159,25 @@ describe('RunController: determinism across worker counts and chunk sizes (spec 
       expect(snapshot.summary).toEqual(reference.summary);
       expect(snapshot.displayed).toEqual(reference.displayed);
     }
+  });
+
+  it('sizes chunks from measured speed and still gives identical results', async () => {
+    const reference = await completeRun(1, 30);
+    // Speed that changes from chunk to chunk, as on a real device under load.
+    const workers = fakeWorkers({
+      computeMs: (simulations, chunkId) => simulations * (chunkId % 3 === 0 ? 40 : 9),
+    });
+    const { controller, finished } = harness(workers.factory, null);
+    const done = finished();
+    controller.start(config, 3);
+    const snapshot = await done;
+    controller.dispose();
+    expect(snapshot.status).toBe('complete');
+    expect(snapshot.summary).toEqual(reference.summary);
+    expect(snapshot.displayed).toEqual(reference.displayed);
+    expect(new Set(workers.chunkSizes).size).toBeGreaterThan(1);
+    expect(workers.chunkSizes.reduce((sum, size) => sum + size, 0)).toBe(config.simulations);
+    expect(snapshot.measuredRoundMicroseconds).toBeGreaterThan(0);
   });
 
   it('fills every displayed simulation with curves for every strategy', async () => {

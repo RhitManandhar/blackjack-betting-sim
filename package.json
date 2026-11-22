@@ -17,7 +17,10 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "bench:houseedge": "vitest run --config vitest.houseedge.config.ts"
+    "bench:houseedge": "vitest run --config vitest.houseedge.config.ts",
+    "bench:perf": "vite build -c scripts/perf/vite.worker.config.ts && vitest run --config vitest.perf.config.ts",
+    "bench:perf:quick": "PERF_GRID=quick npm run bench:perf",
+    "bench:crosscheck": "vitest run --config vitest.crosscheck.config.ts"
   },
   "dependencies": {
     "echarts": "^6.1.0",
@@ -34,6 +37,7 @@
     "@vitejs/plugin-react": "^6.2.1",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.14.0",
@@ -43,5 +47,10 @@
     "typescript-eslint": "^8.72.1",
     "vite": "^8.3.6",
     "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    }
   }
 }

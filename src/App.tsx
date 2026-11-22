@@ -1,4 +1,11 @@
+import { Suspense, lazy } from 'react';
 import { ExperimentPage } from './features/experiment/ExperimentPage';
+
+// The performance check (plan Phase 9) is opened with /?benchmark and loaded only then.
+const BenchmarkPage = lazy(async () => ({
+  default: (await import('./features/benchmark/BenchmarkPage')).BenchmarkPage,
+}));
+const showBenchmark = new URLSearchParams(window.location.search).has('benchmark');
 
 export function App() {
   return (
@@ -13,7 +20,13 @@ export function App() {
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <ExperimentPage />
+        {showBenchmark ? (
+          <Suspense fallback={<p className="text-sm">Loading the performance check…</p>}>
+            <BenchmarkPage />
+          </Suspense>
+        ) : (
+          <ExperimentPage />
+        )}
       </main>
     </div>
   );

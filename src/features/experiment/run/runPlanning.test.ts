@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { testConfig } from '../../../engine/simulation/__tests__/scripted';
 import { STRATEGIES, STRATEGY_IDS } from '../../../shared/strategies';
 import {
+  MAX_CHUNK_SIMULATIONS,
+  NO_TIMING,
+  adaptiveChunkSize,
   chunkSimulationCount,
   estimateRuntimeSeconds,
-  planChunks,
+  measuredRoundMicroseconds,
   resolveWorkerCount,
 } from './runPlanning';
 
@@ -40,14 +43,34 @@ describe('chunkSimulationCount (about 150 ms of worst-case work)', () => {
   );
 });
 
-describe('planChunks', () => {
-  it('covers every simulation exactly once, in order', () => {
-    const chunks = planChunks(53, 24);
-    expect(chunks).toEqual([
-      { chunkId: 0, firstSimulation: 0, simulationCount: 24 },
-      { chunkId: 1, firstSimulation: 24, simulationCount: 24 },
-      { chunkId: 2, firstSimulation: 48, simulationCount: 5 },
-    ]);
+describe('adaptiveChunkSize (about 150 ms at the measured speed)', () => {
+  const config = testConfig({ roundLimit: 1000, strategies: allStrategies });
+
+  it('uses the cautious worst-case size before any chunk is timed', () => {
+    expect(adaptiveChunkSize(config, NO_TIMING)).toBe(chunkSimulationCount(config));
+    expect(adaptiveChunkSize(config, { simulations: 10, rounds: 100, computeMs: 0 })).toBe(
+      chunkSimulationCount(config),
+    );
+  });
+
+  it.each([
+    [48, 120, 60], // 2.5 ms per simulation -> 60
+    [24, 12, 300], // 0.5 ms -> 300
+    [10, 100_000, 1], // very slow: never below one
+    [100, 1, MAX_CHUNK_SIMULATIONS], // very fast: capped
+  ])('%d simulations in %d ms -> %d per chunk', (simulations, computeMs, expected) => {
+    expect(adaptiveChunkSize(config, { simulations, rounds: simulations * 100, computeMs })).toBe(
+      expected,
+    );
+  });
+});
+
+describe('measuredRoundMicroseconds', () => {
+  it('is worker time per round, or null before any timed chunk', () => {
+    expect(measuredRoundMicroseconds(NO_TIMING)).toBeNull();
+    expect(measuredRoundMicroseconds({ simulations: 5, rounds: 2_000_000, computeMs: 900 })).toBe(
+      0.45,
+    );
   });
 });
 
@@ -57,5 +80,10 @@ describe('estimateRuntimeSeconds', () => {
     const one = estimateRuntimeSeconds(config, 1);
     expect(one).toBeCloseTo(1.5 + 31.25, 6);
     expect(estimateRuntimeSeconds(config, 4)).toBeCloseTo(1.5 + 31.25 / 4, 6);
+  });
+
+  it('uses a measured round cost when one is given', () => {
+    const config = testConfig({ simulations: 5000, roundLimit: 1000, strategies: allStrategies });
+    expect(estimateRuntimeSeconds(config, 2, 0.5)).toBeCloseTo(1.5 + 12.5 / 2, 6);
   });
 });

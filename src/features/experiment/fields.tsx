@@ -4,7 +4,7 @@ import { useId } from 'react';
 // with aria-describedby so screen readers announce them.
 
 export const inputClass =
-  'mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-slate-700 dark:bg-slate-950 disabled:opacity-60 aria-[invalid=true]:border-red-600';
+  'mt-1 w-full rounded-md border border-slate-500 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-slate-500 dark:bg-slate-950 disabled:opacity-60 aria-[invalid=true]:border-red-600';
 
 export function FieldError({ id, message }: { readonly id: string; readonly message?: string }) {
   if (message === undefined) return null;

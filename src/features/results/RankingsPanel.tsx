@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { type KeyboardEvent, useId, useRef, useState } from 'react';
 import { GOALS, GOAL_TEXT, type Goal, rankByGoal } from '../../engine/statistics/rankings';
 import type { StrategySummary } from '../../engine/statistics/summary';
 import { STRATEGIES } from '../../shared/strategies';
 import { TARGET_IDS, TARGET_MULTIPLES, type TargetId } from '../../shared/targets';
 import { count } from './resultsData';
 import { NO_CLEAR_LEADER, RANKINGS_NOTE, VERDICT_TEXT, formatRankingValue } from './resultsText';
+import { tabIndexForKey } from './tabKeys';
 
 // Rankings by goal (plan 1 and 7.2, spec 2.7). Always "best under this selected configuration";
 // overlapping 95% intervals are reported as inconclusive, never as a winner.
@@ -17,9 +18,20 @@ interface RankingsPanelProps {
 
 export function RankingsPanel({ strategies, checkpointRounds, defaultTarget }: RankingsPanelProps) {
   const [goal, setGoal] = useState<Goal>('overall');
+  const idBase = useId();
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [target, setTarget] = useState<TargetId>(defaultTarget);
   const [checkpointIndex, setCheckpointIndex] = useState(0);
   const goals = GOALS.filter((entry) => entry !== 'checkpoint' || checkpointRounds.length > 0);
+  // Tabs pattern: one Tab stop for the whole list; arrow keys, Home and End move between goals.
+  const moveFocus = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const next = tabIndexForKey(event.key, goals.indexOf(goal), goals.length);
+    const nextGoal = next === null ? undefined : goals[next];
+    if (next === null || nextGoal === undefined) return;
+    event.preventDefault();
+    setGoal(nextGoal);
+    tabRefs.current[next]?.focus();
+  };
   const ranking = rankByGoal(strategies, goal, { target, checkpointIndex });
 
   const format = (value: number): string => formatRankingValue(goal, value);
@@ -32,12 +44,19 @@ export function RankingsPanel({ strategies, checkpointRounds, defaultTarget }: R
       <h2 className="text-base font-semibold">Rankings by goal</h2>
       <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{RANKINGS_NOTE}</p>
       <div role="tablist" aria-label="Goal" className="mt-3 flex flex-wrap gap-2">
-        {goals.map((entry) => (
+        {goals.map((entry, index) => (
           <button
             key={entry}
+            ref={(element) => {
+              tabRefs.current[index] = element;
+            }}
+            id={`${idBase}-tab-${entry}`}
             type="button"
             role="tab"
             aria-selected={goal === entry}
+            aria-controls={`${idBase}-panel`}
+            tabIndex={goal === entry ? 0 : -1}
+            onKeyDown={moveFocus}
             onClick={() => {
               setGoal(entry);
             }}
@@ -48,13 +67,18 @@ export function RankingsPanel({ strategies, checkpointRounds, defaultTarget }: R
         ))}
       </div>
 
-      <div role="tabpanel" className="mt-3 text-sm">
+      <div
+        role="tabpanel"
+        id={`${idBase}-panel`}
+        aria-labelledby={`${idBase}-tab-${goal}`}
+        className="mt-3 text-sm"
+      >
         <p className="text-slate-600 dark:text-slate-400">Ranked by: {GOAL_TEXT[goal].metric}.</p>
         {goal === 'target' && (
           <label className="mt-2 block">
             Target{' '}
             <select
-              className="rounded-md border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-950"
+              className="rounded-md border border-slate-500 bg-white px-2 py-1 dark:border-slate-500 dark:bg-slate-950"
               value={target}
               onChange={(event) => {
                 const next = TARGET_IDS.find((id) => id === event.target.value);
@@ -73,7 +97,7 @@ export function RankingsPanel({ strategies, checkpointRounds, defaultTarget }: R
           <label className="mt-2 block">
             Checkpoint round{' '}
             <select
-              className="rounded-md border border-slate-300 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-950"
+              className="rounded-md border border-slate-500 bg-white px-2 py-1 dark:border-slate-500 dark:bg-slate-950"
               value={checkpointIndex}
               onChange={(event) => {
                 setCheckpointIndex(Number(event.target.value));

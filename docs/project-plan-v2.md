@@ -231,7 +231,7 @@ Also available: a JSON download of the configuration and seed so a run can be re
 
 **Worker pool.** TypeScript compiles to JavaScript that runs inside Web Workers; the workers provide the parallelism. Use a fixed pool of up to 4, defaulting to the lesser of 4 and the logical core count minus one (at least 1), with a manual 1–4 setting. Work is split into chunks sized to roughly 100–200 ms so cancellation is prompt, and chunks are queued to free workers. Workers aggregate results and send compact progress messages. On Stop All the controller cancels the queue, signals active workers and, as a backstop, terminates and recreates them. A crashed chunk is marked failed or re-queued without double counting. Avoid SharedArrayBuffer in the MVP. A browser cannot be limited to a CPU percentage; “Low CPU” simply means 1–2 workers.
 
-**Limits (initial values, confirmed by benchmark):**
+**Limits (confirmed as final by the Phase 9 benchmark, spec 2.9; see `docs/performance.md`):**
 
 | Limit | Value |
 | --- | --- |
